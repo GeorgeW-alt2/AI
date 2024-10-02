@@ -1,10 +1,10 @@
-#transformer v0.02
+#transformer v0.03
 import numpy as np
 import pickle
 import re
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1270
+KB_MEMORY_UNCOMPRESSED = -1
 learning_rate = 0.01
 epochs = 10
 n = 4
