@@ -1,4 +1,4 @@
-#transformer 0.14
+#transformer 0.15
 
 import numpy as np
 import re
@@ -106,36 +106,36 @@ n = 3  # Example n-gram size
 word_to_index = {ngram: i for i, ngram in enumerate(build_vocabulary(text_data, n)[:vocab_len])}
 ngrams = build_vocabulary(text_data, n)[:vocab_len]
 vocab_size = len(ngrams)
+while True:
 
-# User input for seed text
-seed_text = input("Enter seed text: ")
-seed_tokens = preprocess_text(seed_text)
-seed_ngrams = [tuple(seed_tokens[i:i+n]) for i in range(len(seed_tokens) - n + 1)]
+    # User input for seed text
+    seed_text = input("Enter seed text: ")
+    seed_tokens = preprocess_text(seed_text)
+    seed_ngrams = [tuple(seed_tokens[i:i+n]) for i in range(len(seed_tokens) - n + 1)]
 
-# Convert n-grams to indices
-n_gram_indices = [word_to_index.get(ngram) for ngram in ngrams]
-if None in n_gram_indices:
-    print("Some n-grams in the vocabulary are missing from the indices.")
+    # Convert n-grams to indices
+    n_gram_indices = [word_to_index.get(ngram) for ngram in ngrams]
+    if None in n_gram_indices:
+        print("Some n-grams in the vocabulary are missing from the indices.")
 
-# Create an input array (batch_size=1, seq_length=num_ngrams)
-if len(seed_ngrams) > 0:
-    # Use the last n-gram from the seed for generation
-    last_seed_ngram = seed_ngrams[-1]
-    if last_seed_ngram in word_to_index:
-        x = np.array([[word_to_index[last_seed_ngram]]])  # Wrap in another array to create batch dimension
+    # Create an input array (batch_size=1, seq_length=num_ngrams)
+    if len(seed_ngrams) > 0:
+        # Use the last n-gram from the seed for generation
+        last_seed_ngram = seed_ngrams[-1]
+        if last_seed_ngram in word_to_index:
+            x = np.array([[word_to_index[last_seed_ngram]]])  # Wrap in another array to create batch dimension
+        else:
+            # If the last n-gram is not found, reset input x to a random n-gram
+            random_ngram_index = np.random.choice(range(vocab_size))
+            x = np.array([[random_ngram_index]])
     else:
-        # If the last n-gram is not found, reset input x to a random n-gram
+        # If no valid seed n-grams are available, reset input x to a random n-gram
         random_ngram_index = np.random.choice(range(vocab_size))
         x = np.array([[random_ngram_index]])
-else:
-    # If no valid seed n-grams are available, reset input x to a random n-gram
-    random_ngram_index = np.random.choice(range(vocab_size))
-    x = np.array([[random_ngram_index]])
 
-hidden = np.random.randn(1, hidden_size)  # Initial hidden state
-cell_state = np.random.randn(1, hidden_size)  # Initial cell state
-model = SimpleLSTM(vocab_size, hidden_size, num_layers)
-while True:
+    hidden = np.random.randn(1, hidden_size)  # Initial hidden state
+    cell_state = np.random.randn(1, hidden_size)  # Initial cell state
+    model = SimpleLSTM(vocab_size, hidden_size, num_layers)
     text = []
     for i in range(generate_len):
         # Forward pass
