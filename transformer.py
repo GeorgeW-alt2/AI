@@ -1,4 +1,4 @@
-#transformer v0.05
+#transformer v0.06
 import numpy as np
 import pickle
 import re
@@ -73,11 +73,11 @@ def forward_pass(X, W1, b1, W2, b2, W3, b3):
     dot_pattern1 = generate_dot_pattern(A1, b1)
     
     Z2 = np.tensordot(A1, W2, axes=([0], [0])) + b2
-    A2 = np.tanh(Z2)
+    A2 = np.tanh(dot_pattern1)
     dot_pattern2 = generate_dot_pattern(A2, b2)
     
     Z3 = np.tensordot(A2, W3, axes=([0], [0])) + b3
-    A3 = softmax(Z3, temperature)
+    A3 = softmax(dot_pattern2, temperature)
     dot_pattern3 = generate_dot_pattern(A3, b3)
     
     return A3, A2, A1, dot_pattern1, dot_pattern2, dot_pattern3
@@ -167,14 +167,14 @@ def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
         # Backpropagation
         dA3 = A3 - target_vector
         dZ3 = dA3
-        dW3 = np.outer(A2, dZ3)
+        dW3 = np.outer(A2, dot_pattern1)
         db3 = dZ3
 
-        dA2 = np.dot(W3, dZ3) * (1 - A2 ** 2)
+        dA2 = np.dot(W3, dot_pattern2) * (1 - A2 ** 2)
         dW2 = np.outer(A1, dA2)
         db2 = dA2
 
-        dA1 = np.dot(W2, dA2) * (1 - A1 ** 2)
+        dA1 = np.dot(W2, dot_pattern3) * (1 - A1 ** 2)
         dW1 = np.outer(input_vector, dA1)
         db1 = dA1
 
