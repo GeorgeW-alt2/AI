@@ -1,11 +1,13 @@
-#transformer 0.08
+#transformer 0.09
 import numpy as np
 import pickle
 import re
 import math
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1270
+KB_MEMORY_UNCOMPRESSED = -1
+hidden_dim = 128 
+
 learning_rate = 0.01
 epochs = 10
 n = 4
@@ -73,6 +75,7 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
         # Forward pass
         A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)
         A3 = softmax(dense(A3, W1, b2),temperature)
+        
         # Sample from the adjusted distribution
         predicted_idx = np.random.choice(range(len(A3)), p=A3)
         ngram_word = vocab[predicted_idx] if predicted_idx < len(vocab) else tuple([''])
@@ -171,7 +174,6 @@ def main():
         text_data = f.read()
 
     vocab = build_vocabulary(text_data, n)[:KB_MEMORY_UNCOMPRESSED]
-    hidden_dim = len(vocab)
 
     choice = input("Save new model/Load old model? [s/l]: ")
     
