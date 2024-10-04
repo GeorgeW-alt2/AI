@@ -1,4 +1,4 @@
-#transformer 0.10
+#transformer 0.11
 import numpy as np
 import pickle
 import re
@@ -33,10 +33,18 @@ def softmax(x, temperature=1.0):
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
-
-def dense(input_data, weights, bias):
-    """Compute dense layer output."""
-    return sigmoid(np.dot(input_data, weights) + bias)
+def dense(input_data, weights, bias, gamma=1, beta=0, epsilon=1e-5):
+    """Compute dense layer output with batch normalization."""
+    z = np.dot(input_data, weights) + bias
+    mean = np.mean(z, axis=0)
+    variance = np.var(z, axis=0)
+    
+    # Batch normalization
+    z_norm = (z - mean) / np.sqrt(variance + epsilon)
+    z_scaled = gamma * z_norm + beta
+    
+    # Apply activation function
+    return sigmoid(z_scaled)
 
 def forward_pass(X, W1, b1, W2, b2, W3, b3):
     """Perform a forward pass through the network."""
