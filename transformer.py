@@ -1,11 +1,11 @@
-#transformer 0.15
+#transformer 0.16
 
 import numpy as np
 import re
 
-hidden_size = 128
+hidden_size = 1280
 num_layers = 5
-vocab_len = 999
+vocab_len = -1
 generate_len = 50
 
 class SimpleLSTM:
