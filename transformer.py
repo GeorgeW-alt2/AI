@@ -1,9 +1,8 @@
-#transformer v0.07
+#transformer 0.08
 import numpy as np
 import pickle
 import re
 import math
-
 
 # Constants
 KB_MEMORY_UNCOMPRESSED = 1270
@@ -12,10 +11,11 @@ epochs = 10
 n = 4
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
+
 # Tokenization
 def tokenize(text):
     return text.split()
-    
+
 def dict_to_vector(vector_dict, vocab):
     """Convert a dictionary of n-grams into a vector based on the vocabulary order."""
     vector = np.zeros(len(vocab))
@@ -26,38 +26,29 @@ def dict_to_vector(vector_dict, vocab):
 def softmax(x, temperature=1.0):
     """Softmax function with temperature."""
     x = np.array(x) / temperature
-    exp_x = np.exp(x - np.max(x))
+    exp_x = np.exp(x - np.max(x))  # For numerical stability
     return exp_x / np.sum(exp_x)
-    
-def sigmoid(x):
-    return 1 / (1 + math.exp(-x))
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
 
 def dense(input_data, weights, bias):
-    # Initialize the output
-    output = []
-    
-    # Compute the dot product between input data and weights, and add bias
-    for j in range(len(weights[0])):  # Number of neurons (columns in weights matrix)
-        weighted_sum = 0
-        for i in range(len(input_data)):  # Number of inputs (rows in weights matrix)
-            weighted_sum += input_data[i] * weights[i][j]
-        weighted_sum += bias[j]  # Add the bias term
-        output.append(sigmoid(weighted_sum))  # Apply activation function
-    
-    return output
+    """Compute dense layer output."""
+    return sigmoid(np.dot(input_data, weights) + bias)
+
 def forward_pass(X, W1, b1, W2, b2, W3, b3):
-    Z1 = np.tensordot(X, W1, axes=([0], [0])) + b1
+    """Perform a forward pass through the network."""
+    Z1 = dense(X, W1, b1)
     A1 = np.tanh(Z1)
-    
-    Z2 = np.tensordot(A1, W2, axes=([0], [0])) + b2
+
+    Z2 = dense(A1, W2, b2)
     A2 = np.tanh(Z2)
-    
-    Z3 = np.tensordot(A2, W3, axes=([0], [0])) + b3
+
+    Z3 = dense(A2, W3, b3)
     A3 = softmax(Z3, temperature)
-    
+
     return A3, A2, A1
-    
+
 def compute_ngram_frequencies(text, n):
     """Compute the frequency of each n-gram in the given text."""
     words = text.split()
@@ -65,13 +56,10 @@ def compute_ngram_frequencies(text, n):
     
     for i in range(len(words) - n + 1):
         ngram = tuple(words[i:i+n])
-        if ngram in ngram_counts:
-            ngram_counts[ngram] += 1
-        else:
-            ngram_counts[ngram] = 1
+        ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
     
     return ngram_counts
-    
+
 def chat_with_neural_network(model_params, vocab, user_input, generate_length, n=3):
     W1, b1, W2, b2, W3, b3, ngram_frequencies = model_params
     vocab_size = len(vocab)
@@ -82,16 +70,11 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
         input_dict = compute_ngram_frequencies(current_input[-(n-1):], n)
         input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
         
-        # Forward pass with 3D tensors
+        # Forward pass
         A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)
-        
-        probabilities = softmax(A3-input_vector, temperature)
-        
-        
-        adjusted_probabilities = softmax(dense(A3, W2, b2), temperature)
-        
+        A3 = softmax(dense(A3, W1, b2),temperature)
         # Sample from the adjusted distribution
-        predicted_idx = np.random.choice(range(len(adjusted_probabilities)), p=adjusted_probabilities)
+        predicted_idx = np.random.choice(range(len(A3)), p=A3)
         ngram_word = vocab[predicted_idx] if predicted_idx < len(vocab) else tuple([''])
         
         output.append(' '.join(ngram_word))
@@ -99,53 +82,48 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
     
     return ' '.join(output)
 
-    
 def build_ngram_model(text, n):
-    ngrams = []
-    for i in range(len(text) - n + 1):
-        ngram = tuple(text[i:i+n])
-        ngrams.append(ngram)
+    """Build n-gram frequency model."""
+    ngrams = [tuple(text[i:i+n]) for i in range(len(text) - n + 1)]
     ngram_counts = {}
     for ngram in ngrams:
         ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
     return ngram_counts
-    
+
 def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
-    # Compute n-gram frequencies from the training data
-    
+    """Train the model using the provided text data."""
     input_dict = build_ngram_model(text_data, n)
-    
     input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
 
     target_dict = build_ngram_model(text_data, n)
     target_vector = dict_to_vector(target_dict, vocab)  # Use vector instead of scalar
 
-    input_dim = len(vocab)  # Vector context
+    input_dim = len(vocab)
     output_dim = len(vocab)
 
     # Initialize weights for 3 layers
     W1 = np.random.randn(input_dim, hidden_dim) * 0.01
-    b1 = input_vector # hack requires equal hidden_dim and KB_UNCOMPRESSED
-    W2 = np.random.randn(hidden_dim, hidden_dim) * 0.01  # Added second layer weights
-    b2 = target_vector # hack requires equal hidden_dim and KB_UNCOMPRESSED
-    W3 = np.random.randn(hidden_dim, output_dim) * 0.01  # Output layer weights
-    b3 = np.zeros(hidden_dim)
+    b1 = np.zeros(hidden_dim)  # Initialize bias to zero
+    W2 = np.random.randn(hidden_dim, hidden_dim) * 0.01
+    b2 = np.zeros(hidden_dim)  # Initialize bias to zero
+    W3 = np.random.randn(hidden_dim, output_dim) * 0.01
+    b3 = np.zeros(output_dim)  # Initialize bias to zero
+
     for epoch in range(epochs):
-        # Forward pass with 3 layers
+        # Forward pass
         A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)
         
-        # Backpropagation (3 layers)
+        # Backpropagation
         dA3 = A3 - target_vector
-        dZ3 = dA3  # Gradient for softmax
-        dW3 = np.outer(A2, dZ3)
-        db3 = dZ3
+        dW3 = np.outer(A2, dA3)
+        db3 = dA3
 
-        dA2 = np.dot(W3, dZ3) * (1 - A2 ** 2)  # Gradient w.r.t A2
+        dA2 = np.dot(dA3, W3.T) * (1 - A2 ** 2)  # Use dot product with W3
         dW2 = np.outer(A1, dA2)
         db2 = dA2
 
-        dA1 = np.dot(W2, dA2) * (1 - A1 ** 2)  # Gradient w.r.t A1
-        dW1 = np.outer(input_vector, dA1) - target_vector
+        dA1 = np.dot(dA2, W2.T) * (1 - A1 ** 2)  # Use dot product with W2
+        dW1 = np.outer(input_vector, dA1)
         db1 = dA1
 
         # Update parameters
@@ -156,41 +134,34 @@ def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
         W3 -= learning_rate * dW3
         b3 -= learning_rate * db3
 
-       
         print(f"Epoch {epoch}")
 
-    return W1, b1, W2, b2, W3, b3,input_dict
+    return W1, b1, W2, b2, W3, b3, input_dict
 
 def save_model(model_params, filepath):
+    """Save model parameters to a file."""
     with open(filepath, 'wb') as f:
         pickle.dump(model_params, f)
 
 def load_model(filepath):
+    """Load model parameters from a file."""
     with open(filepath, 'rb') as f:
         return pickle.load(f)
-        
-# Preprocess text by removing stopwords
+
 def preprocess_text(text):
+    """Preprocess text by removing stopwords."""
     tokens = tokenize(text)
     stop_words = ['the', 'a', 'an', 'and', 'in', 'to']
     filtered_tokens = [token for token in tokens if token not in stop_words]
     return filtered_tokens
-    
+
 def build_vocabulary(text_data, n):
-    
-    # Remove symbols and numbers using regex
-    cleaned_text = re.sub(r'[^a-zA-Z\s]', '',  ' '.join(preprocess_text(text_data)))
-    
-    # Split text into words
+    """Build vocabulary of n-grams."""
+    cleaned_text = re.sub(r'[^a-zA-Z\s]', '', ' '.join(preprocess_text(text_data)))
     words = cleaned_text.split()
+    words = [word for word in words if len(word) > 1 or word in ["a", "i"]]
     
-    # Filter out one-character words
-    words = [word for word in words if len(word) > 1 or word == "a" or word == "i"]
-    
-    # Generate n-grams
-    ngrams = [tuple(words[i:i+n]) for i in range(len(words)-n+1)]
-    
-    # Create a list of unique n-grams
+    ngrams = [tuple(words[i:i+n]) for i in range(len(words) - n + 1)]
     vocab = list(set(ngrams))
     
     return vocab
@@ -214,11 +185,7 @@ def main():
     
     while True:
         user_input = input("Enter text: ")
-        
-        # Generate n-grams sequentially
         ngram_predictions = chat_with_neural_network(model_params, vocab, user_input, generate_length, n=n).lower()
-
-        # Print the top 10 longest predictions
         print("Generated n-grams:", ngram_predictions)
 
 if __name__ == '__main__':
