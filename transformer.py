@@ -1,4 +1,4 @@
-#transformer 0.13
+#transformer 0.14
 
 import numpy as np
 import re
@@ -135,33 +135,33 @@ else:
 hidden = np.random.randn(1, hidden_size)  # Initial hidden state
 cell_state = np.random.randn(1, hidden_size)  # Initial cell state
 model = SimpleLSTM(vocab_size, hidden_size, num_layers)
+while True:
+    text = []
+    for i in range(generate_len):
+        # Forward pass
+        output, (new_hidden, new_cell_state) = model.forward(x, hidden, cell_state)
 
-text = []
-for i in range(generate_len):
-    # Forward pass
-    output, (new_hidden, new_cell_state) = model.forward(x, hidden, cell_state)
+        # Generate a word based on the output
+        generated_word_index = model.generate_word(output)
+        generated_word = ngrams[generated_word_index]  # Convert index back to n-gram
+        hidden = new_hidden
+        cell_state = new_cell_state
+        
+        # Add generated n-gram to the text
+        text.append(' '.join(generated_word))
 
-    # Generate a word based on the output
-    generated_word_index = model.generate_word(output)
-    generated_word = ngrams[generated_word_index]  # Convert index back to n-gram
-    hidden = new_hidden
-    cell_state = new_cell_state
-    
-    # Add generated n-gram to the text
-    text.append(' '.join(generated_word))
-
-    # Prepare the next input x based on the last (n-1) generated words
-    if len(text) >= n:  # Ensure enough n-grams are available
-        last_ngram = tuple(text[-n:])  # Take the last n-grams
-        if last_ngram in word_to_index:
-            x = np.array([[word_to_index[last_ngram]]])  # Convert to appropriate shape for input
+        # Prepare the next input x based on the last (n-1) generated words
+        if len(text) >= n:  # Ensure enough n-grams are available
+            last_ngram = tuple(text[-n:])  # Take the last n-grams
+            if last_ngram in word_to_index:
+                x = np.array([[word_to_index[last_ngram]]])  # Convert to appropriate shape for input
+            else:
+                # If the last n-gram is not found, reset input x to a random n-gram
+                random_ngram_index = np.random.choice(range(vocab_size))
+                x = np.array([[random_ngram_index]])
         else:
-            # If the last n-gram is not found, reset input x to a random n-gram
+            # If there aren't enough words yet, use a random n-gram as input
             random_ngram_index = np.random.choice(range(vocab_size))
             x = np.array([[random_ngram_index]])
-    else:
-        # If there aren't enough words yet, use a random n-gram as input
-        random_ngram_index = np.random.choice(range(vocab_size))
-        x = np.array([[random_ngram_index]])
 
-print("Generated Text:", ' '.join(text).lower())
+    print("Generated Text:", ' '.join(text).lower())
