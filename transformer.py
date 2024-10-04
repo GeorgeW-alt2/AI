@@ -1,4 +1,4 @@
-#transformer 0.09
+#transformer 0.10
 import numpy as np
 import pickle
 import re
@@ -6,9 +6,9 @@ import math
 
 # Constants
 KB_MEMORY_UNCOMPRESSED = -1
-hidden_dim = 128 
+hidden_dim = 128
 
-learning_rate = 0.01
+learning_rate = 0.05
 epochs = 10
 n = 4
 generate_length = 40  # Number of n-grams to generate sequentially
@@ -69,7 +69,7 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
     current_input = user_input
     
     for length in range(generate_length):
-        input_dict = compute_ngram_frequencies(current_input[-(n-1):], n)
+        input_dict = compute_ngram_frequencies(current_input, n)
         input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
         
         # Forward pass
@@ -137,7 +137,7 @@ def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
         W3 -= learning_rate * dW3
         b3 -= learning_rate * db3
 
-        print(f"Epoch {epoch}")
+        print(f"Epoch {epoch+1}")
 
     return W1, b1, W2, b2, W3, b3, input_dict
 
