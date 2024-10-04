@@ -1,4 +1,4 @@
-#transformer v0.04
+#transformer v0.05
 import numpy as np
 import pickle
 import re
@@ -28,25 +28,57 @@ def softmax(x, temperature=1.0):
     x = np.array(x) / temperature
     exp_x = np.exp(x - np.max(x))
     return exp_x / np.sum(exp_x)
+import numpy as np
 
 def generate_dot_pattern(A, threshold):
-    """Generates a dot pattern (binary output) based on a threshold."""
+    """Generates a unimodal dot pattern (binary output) based on a threshold."""
+    if A.ndim == 1:
+        # If A is 1D, create a unimodal pattern for a vector
+        length = A.shape[0]
+        center = length // 2
+        
+        # Compute the distance from the center for each point
+        distances = np.abs(np.arange(length) - center)
+        
+        # Create a Gaussian-like distribution based on the distances
+        sigma = length / 4
+        gaussian = np.exp(-distances ** 2 / (2 * sigma ** 2))
+        
+    elif A.ndim == 2:
+        # If A is 2D, create a unimodal pattern for a matrix
+        rows, cols = A.shape
+        row_indices, col_indices = np.indices((rows, cols))
+        center_row, center_col = rows // 2, cols // 2
+        
+        # Compute the distance from the center for each point
+        distances = np.sqrt((row_indices - center_row) ** 2 + (col_indices - center_col) ** 2)
+        
+        # Create a Gaussian-like distribution based on the distances
+        sigma = min(rows, cols) / 4
+        gaussian = np.exp(-distances ** 2 / (2 * sigma ** 2))
+    
+    else:
+        raise ValueError("Input array must be 1D or 2D.")
+    
+    # Generate dot pattern by comparing A to the unimodal distribution
     dot_pattern = np.zeros_like(A)
-    dot_pattern[A > threshold] = 1  # 1 if above threshold, else 0
+    dot_pattern[A > threshold * gaussian] = 1  # 1 if above threshold * gaussian, else 0
     return dot_pattern
 
-def forward_pass(X, W1, b1, W2, b2, W3, b3, dot_threshold):
+
+
+def forward_pass(X, W1, b1, W2, b2, W3, b3):
     Z1 = np.tensordot(X, W1, axes=([0], [0])) + b1
     A1 = np.tanh(Z1)
-    dot_pattern1 = generate_dot_pattern(A1, dot_threshold)
+    dot_pattern1 = generate_dot_pattern(A1, b1)
     
     Z2 = np.tensordot(A1, W2, axes=([0], [0])) + b2
     A2 = np.tanh(Z2)
-    dot_pattern2 = generate_dot_pattern(A2, dot_threshold)
+    dot_pattern2 = generate_dot_pattern(A2, b2)
     
     Z3 = np.tensordot(A2, W3, axes=([0], [0])) + b3
     A3 = softmax(Z3, temperature)
-    dot_pattern3 = generate_dot_pattern(A3, dot_threshold)
+    dot_pattern3 = generate_dot_pattern(A3, b3)
     
     return A3, A2, A1, dot_pattern1, dot_pattern2, dot_pattern3
 
@@ -64,7 +96,7 @@ def compute_ngram_frequencies(text, n):
     
     return reverse_ngram_dict(ngram_counts)
 
-def chat_with_neural_network(model_params, vocab, user_input, generate_length, dot_threshold, n=3):
+def chat_with_neural_network(model_params, vocab, user_input, generate_length, n=3):
     W1, b1, W2, b2, W3, b3, ngram_frequencies = model_params
     vocab_size = len(vocab)
     output = []
@@ -75,7 +107,7 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, d
         input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
         
         # Forward pass with 3D tensors and dot patterns
-        A3, A2, A1, dot_pattern1, dot_pattern2, dot_pattern3 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3, dot_threshold)
+        A3, A2, A1, dot_pattern1, dot_pattern2, dot_pattern3 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)
         
         probabilities = softmax(A3 - input_vector, temperature)
         
@@ -110,7 +142,7 @@ def build_ngram_model(text, n):
         ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
     return ngram_counts
     
-def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs, dot_threshold):
+def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
     input_dict = build_ngram_model(text_data, n)
     input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
 
@@ -130,7 +162,7 @@ def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs, dot_thre
 
     for epoch in range(epochs):
         # Forward pass with 3 layers and dot patterns
-        A3, A2, A1, dot_pattern1, dot_pattern2, dot_pattern3 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3, dot_threshold)
+        A3, A2, A1, dot_pattern1, dot_pattern2, dot_pattern3 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)
         
         # Backpropagation
         dA3 = A3 - target_vector
@@ -143,7 +175,7 @@ def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs, dot_thre
         db2 = dA2
 
         dA1 = np.dot(W2, dA2) * (1 - A1 ** 2)
-        dW1 = np.outer(input_vector, dA1) - target_vector
+        dW1 = np.outer(input_vector, dA1)
         db1 = dA1
 
         # Update parameters
@@ -202,7 +234,7 @@ def main():
     choice = input("Save new model/Load old model? [s/l]: ")
     
     if choice == 's':
-        model_params = train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs, dot_threshold)
+        model_params = train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs)
         save_model(model_params, 'model.pkl')
         print("Model saved.")
     elif choice == 'l':
@@ -213,7 +245,7 @@ def main():
         user_input = input("Enter text: ")
         
         # Generate n-grams with dot pattern visualization
-        ngram_predictions = chat_with_neural_network(model_params, vocab, user_input, generate_length, dot_threshold, n=n).lower()
+        ngram_predictions = chat_with_neural_network(model_params, vocab, user_input, generate_length, n=n).lower()
         
         print("Generated n-grams:", ngram_predictions)
 
