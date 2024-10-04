@@ -1,4 +1,4 @@
-#transformer v0.05
+#transformer v0.06
 import numpy as np
 import pickle
 import re
