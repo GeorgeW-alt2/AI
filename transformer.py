@@ -1,12 +1,9 @@
-#transformer v0.06
+#transformer v0.07
 import numpy as np
 import pickle
 import re
-from scipy.stats import entropy
+import math
 
-def calculate_entropy(probabilities):
-    """Compute the entropy of the probability distribution."""
-    return entropy(probabilities)
 
 # Constants
 KB_MEMORY_UNCOMPRESSED = 1270
@@ -31,7 +28,24 @@ def softmax(x, temperature=1.0):
     x = np.array(x) / temperature
     exp_x = np.exp(x - np.max(x))
     return exp_x / np.sum(exp_x)
+    
+def sigmoid(x):
+    return 1 / (1 + math.exp(-x))
 
+
+def dense(input_data, weights, bias):
+    # Initialize the output
+    output = []
+    
+    # Compute the dot product between input data and weights, and add bias
+    for j in range(len(weights[0])):  # Number of neurons (columns in weights matrix)
+        weighted_sum = 0
+        for i in range(len(input_data)):  # Number of inputs (rows in weights matrix)
+            weighted_sum += input_data[i] * weights[i][j]
+        weighted_sum += bias[j]  # Add the bias term
+        output.append(sigmoid(weighted_sum))  # Apply activation function
+    
+    return output
 def forward_pass(X, W1, b1, W2, b2, W3, b3):
     Z1 = np.tensordot(X, W1, axes=([0], [0])) + b1
     A1 = np.tanh(Z1)
@@ -73,10 +87,8 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
         
         probabilities = softmax(A3-input_vector, temperature)
         
-        # Compute entropy of the probabilities
-        entropy_value = calculate_entropy(probabilities)
         
-        adjusted_probabilities = softmax(probabilities, entropy_value)
+        adjusted_probabilities = softmax(dense(A3, W2, b2), temperature)
         
         # Sample from the adjusted distribution
         predicted_idx = np.random.choice(range(len(adjusted_probabilities)), p=adjusted_probabilities)
