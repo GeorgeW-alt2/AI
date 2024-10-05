@@ -1,167 +1,215 @@
-#transformer 0.16
-
+#transformer v0.17
 import numpy as np
+import pickle
 import re
 
-hidden_size = 1280
-num_layers = 5
-vocab_len = -1
-generate_len = 50
-
-class SimpleLSTM:
-    def __init__(self, vocab_size, hidden_size, num_layers):
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        
-        # Initialize embedding lookup table (vocab_size x hidden_size)
-        self.embedding_weights = np.random.randn(vocab_size, hidden_size)
-        
-        # Initialize LSTM weights and biases
-        self.Wf = np.random.randn(hidden_size, hidden_size)  # Forget gate
-        self.Wi = np.random.randn(hidden_size, hidden_size)  # Input gate
-        self.Wc = np.random.randn(hidden_size, hidden_size)  # Candidate memory
-        self.Wo = np.random.randn(hidden_size, hidden_size)  # Output gate
-        self.Uf = np.random.randn(hidden_size, hidden_size)  # Forget gate for input
-        self.Ui = np.random.randn(hidden_size, hidden_size)  # Input gate for input
-        self.Uc = np.random.randn(hidden_size, hidden_size)  # Candidate memory for input
-        self.Uo = np.random.randn(hidden_size, hidden_size)  # Output gate for input
-        self.bf = np.random.randn(hidden_size)  # Forget gate bias
-        self.bi = np.random.randn(hidden_size)  # Input gate bias
-        self.bc = np.random.randn(hidden_size)  # Candidate memory bias
-        self.bo = np.random.randn(hidden_size)  # Output gate bias
-        
-        # Fully connected layer weights and bias
-        self.fc_weights = np.random.randn(hidden_size, vocab_size)
-        self.fc_bias = np.random.randn(vocab_size)
-
-    def sigmoid(self, x):
-        return 1 / (1 + np.exp(-x))
-    
-    def tanh(self, x):
-        return np.tanh(x)
-    
-    def softmax(self, x):
-        exp_x = np.exp(x - np.max(x))  # Stability improvement
-        return exp_x / exp_x.sum(axis=-1, keepdims=True)
-    
-    def forward(self, x, hidden, cell_state):
-        batch_size = x.shape[0]
-        seq_length = x.shape[1]
-        
-        h, c = hidden, cell_state  # Unpack hidden and cell states
-        
-        for t in range(seq_length):
-            # Embedding lookup for each n-gram index in sequence
-            x_t = x[:, t]  # Current n-gram index
-            embedding_vector = self.embedding_weights[x_t]
-            
-            # LSTM cell calculations for one time step
-            f_t = self.sigmoid(np.dot(embedding_vector, self.Wf) + np.dot(h, self.Uf) + self.bf)  # Forget gate
-            i_t = self.sigmoid(np.dot(embedding_vector, self.Wi) + np.dot(h, self.Ui) + self.bi)  # Input gate
-            o_t = self.sigmoid(np.dot(embedding_vector, self.Wo) + np.dot(h, self.Uo) + self.bo)  # Output gate
-            c_tilde = self.tanh(np.dot(embedding_vector, self.Wc) + np.dot(h, self.Uc) + self.bc)  # Candidate memory
-            
-            c = f_t * c + i_t * c_tilde  # Update cell state
-            h = o_t * self.tanh(c)  # Update hidden state
-            
-        # After processing the whole sequence, pass the last hidden state through the fully connected layer
-        output = np.dot(h, self.fc_weights) + self.fc_bias
-        
-        return output, (h, c)
-
-    def generate_word(self, output):
-        """Generate a word based on the output probabilities."""
-        probabilities = self.softmax(output)  # Convert logits to probabilities
-        probabilities = probabilities.flatten()  # Ensure it's a 1D array
-        return np.random.choice(range(len(probabilities)), p=probabilities)  # Sample word index
-
+# Constants
+KB_MEMORY_UNCOMPRESSED = 1270
+learning_rate = 0.01
+epochs = 10
+n = 4
+generate_length = 40  # Number of n-grams to generate sequentially
+temperature = 0.7  # Temperature for softmax
 # Tokenization
 def tokenize(text):
     return text.split()
     
+def dict_to_vector(vector_dict, vocab):
+    """Convert a dictionary of n-grams into a vector based on the vocabulary order."""
+    vector = np.zeros(len(vocab))
+    for i, ngram in enumerate(vocab):
+        vector[i] = vector_dict.get(ngram, 0)
+    return vector
+
+def softmax(x, temperature=1.0):
+    """Softmax function with temperature."""
+    x = np.array(x) / temperature
+    exp_x = np.exp(x - np.max(x))
+    return exp_x / np.sum(exp_x)
+    
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+    
+def dense(input_data, weights, bias):
+    z = np.dot(input_data, weights) + bias
+    # Apply activation function
+    return sigmoid(z)
+
+def forward_pass(X, W1, b1, W2, b2, W3, b3):
+    """Perform a forward pass through the network."""
+    Z1 = dense(X, W1, b1)
+    A1 = np.tanh(Z1)
+
+    Z2 = dense(A1, W2, b2)
+    A2 = np.tanh(Z2)
+
+    Z3 = dense(A2, W3, b3)
+    A3 = softmax(Z3, temperature)
+
+    return A3, A2, A1
+    
+def compute_ngram_frequencies(text, n):
+    """Compute the frequency of each n-gram in the given text."""
+    words = text.split()
+    ngram_counts = {}
+    
+    for i in range(len(words) - n + 1):
+        ngram = tuple(words[i:i+n])
+        if ngram in ngram_counts:
+            ngram_counts[ngram] += 1
+        else:
+            ngram_counts[ngram] = 1
+    
+    return ngram_counts
+    
+def chat_with_neural_network(model_params, vocab, user_input, generate_length, n=3):
+    W1, b1, W2, b2, W3, b3, ngram_frequencies = model_params
+    vocab_size = len(vocab)
+    output = []
+    current_input = user_input
+    
+    for length in range(generate_length):
+
+
+        input_dict = compute_ngram_frequencies(' '.join(np.roll(current_input[-(n-1):].split(), shift = -2)), n)
+        input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
+        
+        # Forward pass with 3D tensors
+        A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)#active memory?
+        
+        probabilities = softmax(A3, temperature)
+        
+        # Sample from the distribution
+        predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)
+        
+        ngram_word = vocab[predicted_idx] if predicted_idx < len(vocab) else tuple([''])
+        
+        output.append(' '.join(ngram_word))
+        
+        current_input = ' '.join(output)
+    
+    return ' '.join(output)
+    
+def build_ngram_model(text, n):
+    ngrams = []
+    for i in range(len(text) - n + 1):
+        ngram = tuple(text[i:i+n])
+        ngrams.append(ngram)
+    ngram_counts = {}
+    for ngram in ngrams:
+        ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
+    return ngram_counts
+    
+def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
+    # Compute n-gram frequencies from the training data
+    
+    input_dict = build_ngram_model(text_data, n)
+    
+    input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
+
+    target_dict = build_ngram_model(text_data, n)
+    target_vector = dict_to_vector(target_dict, vocab)  # Use vector instead of scalar
+
+    input_dim = len(vocab)  # Vector context
+    output_dim = len(vocab)
+
+    # Initialize weights for 3 layers
+    W1 = np.random.randn(input_dim, hidden_dim) * 0.01
+    b1 = input_vector # hack requires equal hidden_dim and KB_UNCOMPRESSED
+    W2 = np.random.randn(hidden_dim, hidden_dim) * 0.01  # Added second layer weights
+    b2 = target_vector # hack requires equal hidden_dim and KB_UNCOMPRESSED
+    W3 = np.random.randn(hidden_dim, output_dim) * 0.01  # Output layer weights
+    b3 = np.zeros(hidden_dim)
+    for epoch in range(epochs):
+        # Forward pass with 3 layers
+        A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)
+        
+        # Backpropagation (3 layers)
+        dA3 = A3 - target_vector
+        dZ3 = dA3  # Gradient for softmax
+        dW3 = np.outer(A2, dZ3)
+        db3 = dZ3
+
+        dA2 = np.dot(W3, dZ3) * (1 - A2 ** 2)  # Gradient w.r.t A2
+        dW2 = np.outer(A1, dA2)
+        db2 = dA2
+
+        dA1 = np.dot(W2, dA2) * (1 - A1 ** 2)  # Gradient w.r.t A1
+        dW1 = np.outer(input_vector, dA1) - target_vector
+        db1 = dA1
+
+        # Update parameters
+        W1 -= learning_rate * dW1
+        b1 -= learning_rate * db1
+        W2 -= learning_rate * dW2
+        b2 -= learning_rate * db2
+        W3 -= learning_rate * dW3
+        b3 -= learning_rate * db3
+
+       
+        print(f"Epoch {epoch}")
+
+    return W1, b1, W2, b2, W3, b3,input_dict
+
+def save_model(model_params, filepath):
+    with open(filepath, 'wb') as f:
+        pickle.dump(model_params, f)
+
+def load_model(filepath):
+    with open(filepath, 'rb') as f:
+        return pickle.load(f)
+        
+# Preprocess text by removing stopwords
 def preprocess_text(text):
-    """Preprocess text by removing stopwords."""
     tokens = tokenize(text)
     stop_words = ['the', 'a', 'an', 'and', 'in', 'to']
     filtered_tokens = [token for token in tokens if token not in stop_words]
     return filtered_tokens
     
 def build_vocabulary(text_data, n):
-    """Build vocabulary of n-grams."""
-    cleaned_text = re.sub(r'[^a-zA-Z\s]', '', ' '.join(preprocess_text(text_data)))
-    words = cleaned_text.split()
-    words = [word for word in words if len(word) > 1 or word in ["a", "i"]]
     
-    ngrams = [tuple(words[i:i+n]) for i in range(len(words) - n + 1)]
+    # Remove symbols and numbers using regex
+    cleaned_text = re.sub(r'[^a-zA-Z\s]', '',  ' '.join(preprocess_text(text_data)))
+    
+    # Split text into words
+    words = cleaned_text.split()
+    
+    # Filter out one-character words
+    words = [word for word in words if len(word) > 1 or word == "a" or word == "i"]
+    
+    # Generate n-grams
+    ngrams = [tuple(words[i:i+n]) for i in range(len(words)-n+1)]
+    
+    # Create a list of unique n-grams
     vocab = list(set(ngrams))
     
     return vocab
+
+def main():
+    with open("test.txt", encoding="UTF-8") as f:
+        text_data = f.read()
+
+    vocab = build_vocabulary(text_data, n)[:KB_MEMORY_UNCOMPRESSED]
+    hidden_dim = len(vocab)
+
+    choice = input("Save new model/Load old model? [s/l]: ")
     
-# Load text data
-with open("test.txt", encoding="UTF-8") as f:
-    text_data = f.read()
-
-# Build vocabulary and generate n-grams
-n = 3  # Example n-gram size
-word_to_index = {ngram: i for i, ngram in enumerate(build_vocabulary(text_data, n)[:vocab_len])}
-ngrams = build_vocabulary(text_data, n)[:vocab_len]
-vocab_size = len(ngrams)
-while True:
-
-    # User input for seed text
-    seed_text = input("Enter seed text: ")
-    seed_tokens = preprocess_text(seed_text)
-    seed_ngrams = [tuple(seed_tokens[i:i+n]) for i in range(len(seed_tokens) - n + 1)]
-
-    # Convert n-grams to indices
-    n_gram_indices = [word_to_index.get(ngram) for ngram in ngrams]
-    if None in n_gram_indices:
-        print("Some n-grams in the vocabulary are missing from the indices.")
-
-    # Create an input array (batch_size=1, seq_length=num_ngrams)
-    if len(seed_ngrams) > 0:
-        # Use the last n-gram from the seed for generation
-        last_seed_ngram = seed_ngrams[-1]
-        if last_seed_ngram in word_to_index:
-            x = np.array([[word_to_index[last_seed_ngram]]])  # Wrap in another array to create batch dimension
-        else:
-            # If the last n-gram is not found, reset input x to a random n-gram
-            random_ngram_index = np.random.choice(range(vocab_size))
-            x = np.array([[random_ngram_index]])
-    else:
-        # If no valid seed n-grams are available, reset input x to a random n-gram
-        random_ngram_index = np.random.choice(range(vocab_size))
-        x = np.array([[random_ngram_index]])
-
-    hidden = np.random.randn(1, hidden_size)  # Initial hidden state
-    cell_state = np.random.randn(1, hidden_size)  # Initial cell state
-    model = SimpleLSTM(vocab_size, hidden_size, num_layers)
-    text = []
-    for i in range(generate_len):
-        # Forward pass
-        output, (new_hidden, new_cell_state) = model.forward(x, hidden, cell_state)
-
-        # Generate a word based on the output
-        generated_word_index = model.generate_word(output)
-        generated_word = ngrams[generated_word_index]  # Convert index back to n-gram
-        hidden = new_hidden
-        cell_state = new_cell_state
+    if choice == 's':
+        model_params = train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs)
+        save_model(model_params, 'model.pkl')
+        print("Model saved.")
+    elif choice == 'l':
+        model_params = load_model('model.pkl')
+        print("Model loaded.")
+    
+    while True:
+        user_input = input("Enter text: ")
         
-        # Add generated n-gram to the text
-        text.append(' '.join(generated_word))
+        # Generate n-grams sequentially
+        ngram_predictions = chat_with_neural_network(model_params, vocab, user_input, generate_length, n=n).lower()
 
-        # Prepare the next input x based on the last (n-1) generated words
-        if len(text) >= n:  # Ensure enough n-grams are available
-            last_ngram = tuple(text[-n:])  # Take the last n-grams
-            if last_ngram in word_to_index:
-                x = np.array([[word_to_index[last_ngram]]])  # Convert to appropriate shape for input
-            else:
-                # If the last n-gram is not found, reset input x to a random n-gram
-                random_ngram_index = np.random.choice(range(vocab_size))
-                x = np.array([[random_ngram_index]])
-        else:
-            # If there aren't enough words yet, use a random n-gram as input
-            random_ngram_index = np.random.choice(range(vocab_size))
-            x = np.array([[random_ngram_index]])
+        # Print the top 10 longest predictions
+        print("Generated n-grams:", ngram_predictions)
 
-    print("Generated Text:", ' '.join(text).lower())
+if __name__ == '__main__':
+    main()
