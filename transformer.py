@@ -1,4 +1,4 @@
-#transformer v0.25
+#transformer v0.27
 import numpy as np
 import pickle
 import re
@@ -48,10 +48,10 @@ def spongeprob(linear):
 def forward_pass(X, W1, b1, W2, b2, W3, b3):
     """Perform a forward pass through the network."""
     Z1 = dense(X, W3, b3)
-    A1 = responge(Z1)
+    A1 = spongeprob(Z1)
     
     Z2 = dense(A1, W2, b2)
-    A2 = responge(Z2)
+    A2 = spongeprob(Z2)
 
     Z3 = dense(A2, W3, b3)
     A3 = softmax(Z3, temperature)
