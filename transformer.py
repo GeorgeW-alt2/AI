@@ -1,4 +1,4 @@
-#transformer v0.24
+#transformer v0.25
 import numpy as np
 import pickle
 import re
@@ -39,13 +39,13 @@ def dense(input_data, weights, bias):
 
 def forward_pass(X, W1, b1, W2, b2, W3, b3):
     """Perform a forward pass through the network."""
-    Z1 = dense(dense(dense(X, W3, b3), W1, b1), W1, b1)
+    Z1 = dense(X, W3, b3)
     A1 = np.tanh(Z1)
 
-    Z2 = dense(A1, dense(A1, dense(A1, W2, b2), b2), b2)
+    Z2 = dense(A1, W2, b2)
     A2 = np.tanh(Z2)
 
-    Z3 = dense(A2, W3, dense(A2, W3, dense(A2, W3, b3)))
+    Z3 = dense(A2, W3, b3)
     A3 = softmax(Z3, temperature)
 
     return A3, A2, A1
