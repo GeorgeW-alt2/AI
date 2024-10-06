@@ -1,17 +1,15 @@
-#transformer v0.27
+#transformer v0.28
 import numpy as np
 import pickle
 import re
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1270
+KB_MEMORY_UNCOMPRESSED = 227
 learning_rate = 0.01
 epochs = 10
 n = 3
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
-penalty_factor = 0.2
-blunting_value = 150
 
 # Tokenization
 def tokenize(text):
@@ -131,7 +129,7 @@ def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
         W3 -= learning_rate * dW3
         b3 -= learning_rate * db3
 
-        print(f"Epoch {epoch}")
+        print(f"Epoch {epoch+1}")
 
     return W1, b1, W2, b2, W3, b3,input_dict
 
