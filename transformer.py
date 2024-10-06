@@ -11,6 +11,7 @@ n = 3
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
 penalty_factor = 0.2
+blunting_value = 150
 
 # Tokenization
 def tokenize(text):
@@ -36,14 +37,21 @@ def dense(input_data, weights, bias):
     z = np.dot(input_data, weights) + bias
     # Apply activation function
     return sigmoid(z)
-
+    
+def spongeprob(linear):
+    predicted_indices = []
+    for i in range(len(linear)):
+        predicted_idx = np.random.choice(range(len(linear)), p=softmax(linear, temperature=1.0))
+        predicted_indices.append(predicted_idx)  # Store predicted index
+    return softmax(predicted_indices)
+    
 def forward_pass(X, W1, b1, W2, b2, W3, b3):
     """Perform a forward pass through the network."""
     Z1 = dense(X, W3, b3)
-    A1 = np.tanh(Z1)
-
+    A1 = responge(Z1)
+    
     Z2 = dense(A1, W2, b2)
-    A2 = np.tanh(Z2)
+    A2 = responge(Z2)
 
     Z3 = dense(A2, W3, b3)
     A3 = softmax(Z3, temperature)
@@ -55,7 +63,6 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
     vocab_size = len(vocab)
     output = []
     current_input = user_input
-    recent_ngrams = []
     for length in range(generate_length):
 
 
@@ -66,19 +73,13 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
         A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)#active memory?
         
         probabilities = softmax(A3, temperature)
-        probabilities = penalize_repeats(probabilities, recent_ngrams, vocab)  # Apply penalty
         
         # Sample from the distribution
+
         predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)
         
         ngram_word = vocab[predicted_idx] if predicted_idx < len(vocab) else tuple([''])
-        
         output.append(' '.join(ngram_word))
-        recent_ngrams.append(ngram_word)  # Add to recent n-grams
-        
-        # Keep the recent n-gram list limited to avoid over-penalizing
-        if len(recent_ngrams) > n:
-            recent_ngrams.pop(0)
         
         current_input = ' '.join(output)
     
@@ -130,7 +131,6 @@ def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
         W3 -= learning_rate * dW3
         b3 -= learning_rate * db3
 
-       
         print(f"Epoch {epoch}")
 
     return W1, b1, W2, b2, W3, b3,input_dict
@@ -146,9 +146,8 @@ def load_model(filepath):
 # Preprocess text by removing stopwords
 def preprocess_text(text):
     tokens = tokenize(text)
-    stop_words = ['the', 'a', 'an', 'and', 'in', 'to']
-    filtered_tokens = [token for token in tokens if token not in stop_words]
-    return filtered_tokens
+
+    return tokens
     
 def build_vocabulary(text_data, n):
     
