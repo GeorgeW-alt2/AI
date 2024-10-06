@@ -1,4 +1,4 @@
-#transformer v0.21
+#transformer v0.23
 import numpy as np
 import pickle
 import re
@@ -10,6 +10,7 @@ epochs = 10
 n = 3
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
+penalty_factor = 0.2
 # Tokenization
 def tokenize(text):
     return text.split()
@@ -53,7 +54,7 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
     vocab_size = len(vocab)
     output = []
     current_input = user_input
-    
+    recent_ngrams = []
     for length in range(generate_length):
 
 
@@ -64,6 +65,7 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
         A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)#active memory?
         
         probabilities = softmax(A3, temperature)
+        probabilities = penalize_repeats(probabilities, recent_ngrams, vocab)  # Apply penalty
         
         # Sample from the distribution
         predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)
@@ -71,6 +73,11 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
         ngram_word = vocab[predicted_idx] if predicted_idx < len(vocab) else tuple([''])
         
         output.append(' '.join(ngram_word))
+        recent_ngrams.append(ngram_word)  # Add to recent n-grams
+        
+        # Keep the recent n-gram list limited to avoid over-penalizing
+        if len(recent_ngrams) > n:
+            recent_ngrams.pop(0)
         
         current_input = ' '.join(output)
     
@@ -193,6 +200,16 @@ def build_ngram_model(text, n):
         
     return ngram_counts
 
+def penalize_repeats(probabilities, recent_ngrams, vocab):
+    """Apply penalty to probabilities based on recently generated n-grams."""
+    for i, ngram in enumerate(vocab):
+        if ngram in recent_ngrams and i < len(probabilities):
+            probabilities[i+1] *= penalty_factor  # Apply penalty
+    
+    # Normalize probabilities to sum to 1 after penalty
+    total_prob = sum(probabilities)
+    return [p / total_prob for p in probabilities]
+    
 def main():
     with open("test.txt", encoding="UTF-8") as f:
         text_data = f.read()
@@ -215,7 +232,7 @@ def main():
         user_input = input("Enter text: ")
         
         # Generate n-grams sequentially
-        ngram_predictions = chat_with_neural_network(model_params, vocab, user_input, generate_length, n=n).lower()
+        ngram_predictions = chat_with_neural_network(model_params, vocab, user_input, generate_length, n).lower()
 
         # Print the top 10 longest predictions
         print("Generated n-grams:", ngram_predictions)
