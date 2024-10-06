@@ -1,4 +1,4 @@
-#transformer v0.23
+#transformer v0.24
 import numpy as np
 import pickle
 import re
@@ -11,6 +11,7 @@ n = 3
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
 penalty_factor = 0.2
+
 # Tokenization
 def tokenize(text):
     return text.split()
@@ -203,7 +204,7 @@ def build_ngram_model(text, n):
 def penalize_repeats(probabilities, recent_ngrams, vocab):
     """Apply penalty to probabilities based on recently generated n-grams."""
     for i, ngram in enumerate(vocab):
-        if ngram in recent_ngrams and i < len(probabilities):
+        if ngram in recent_ngrams and i < len(probabilities)-1:
             probabilities[i+1] *= penalty_factor  # Apply penalty
     
     # Normalize probabilities to sum to 1 after penalty
