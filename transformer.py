@@ -1,4 +1,4 @@
-#transformer v0.20
+#transformer v0.21
 import numpy as np
 import pickle
 import re
@@ -7,7 +7,7 @@ import re
 KB_MEMORY_UNCOMPRESSED = 1270
 learning_rate = 0.01
 epochs = 10
-n = 4
+n = 3
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
 # Tokenization
