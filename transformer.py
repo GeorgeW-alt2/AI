@@ -1,4 +1,4 @@
-#transformer v0.19
+#transformer v0.20
 import numpy as np
 import pickle
 import re
@@ -48,20 +48,6 @@ def forward_pass(X, W1, b1, W2, b2, W3, b3):
 
     return A3, A2, A1
     
-def compute_ngram_frequencies(text, n):
-    """Compute the frequency of each n-gram in the given text."""
-    words = text.split()
-    ngram_counts = {}
-    
-    for i in range(len(words) - n + 1):
-        ngram = tuple(words[i:i+n])
-        if ngram in ngram_counts:
-            ngram_counts[ngram] += 1
-        else:
-            ngram_counts[ngram] = 1
-    
-    return ngram_counts
-    
 def chat_with_neural_network(model_params, vocab, user_input, generate_length, n=3):
     W1, b1, W2, b2, W3, b3, ngram_frequencies = model_params
     vocab_size = len(vocab)
@@ -89,16 +75,6 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
         current_input = ' '.join(output)
     
     return ' '.join(output)
-    
-def build_ngram_model(text, n):
-    ngrams = []
-    for i in range(len(text) - n + 1):
-        ngram = tuple(text[i:i+n])
-        ngrams.append(ngram)
-    ngram_counts = {}
-    for ngram in ngrams:
-        ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
-    return ngram_counts
     
 def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
     # Compute n-gram frequencies from the training data
@@ -184,11 +160,44 @@ def build_vocabulary(text_data, n):
     vocab = list(set(ngrams))
     
     return vocab
+from itertools import permutations
+
+def compute_ngram_frequencies(text, n):
+    """Compute the frequency of each n-gram (including permutations) in the given text."""
+    words = text.split()
+    ngram_counts = {}
+    
+    for i in range(len(words) - n + 1):
+        # Get the n-gram
+        ngram = tuple(words[i:i+n])
+        # Add all permutations of this n-gram to the counts
+        for perm in permutations(ngram):
+            if perm in ngram_counts:
+                ngram_counts[perm] += 1
+            else:
+                ngram_counts[perm] = 1
+    
+    return ngram_counts
+
+def build_ngram_model(text, n):
+    """Build the n-gram model including permutations."""
+    ngrams = []
+    for i in range(len(text) - n + 1):
+        ngram = tuple(text[i:i+n])
+        # Add all permutations of this n-gram to the list
+        ngrams.extend(permutations(ngram))
+    
+    ngram_counts = {}
+    for ngram in ngrams:
+        ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
+        
+    return ngram_counts
 
 def main():
     with open("test.txt", encoding="UTF-8") as f:
         text_data = f.read()
 
+    # Build vocabulary based on n-grams that include permutations
     vocab = build_vocabulary(text_data, n)[:KB_MEMORY_UNCOMPRESSED]
     hidden_dim = len(vocab)
 
