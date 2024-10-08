@@ -1,4 +1,4 @@
-#transformer v0.29
+#transformer v0.30
 import numpy as np
 import pickle
 import re
@@ -58,18 +58,67 @@ def spongeprob(input_vector, vocab, depth=3):
 
     return softmax(combined_probs)  # Apply softmax to get valid probabilities
     
-def forward_pass(X, W1, b1, W2, b2, W3, b3):
-    """Perform a forward pass through the network."""
-    Z1 = dense(X, W3, b3)
-    A1 = spongeprob(Z1,X)
+import numpy as np
+
+def adaptive_dense(input_data, weights, bias, activation='sigmoid'):
+    """Perform a flexible dense layer operation based on the specified activation."""
+    linear_output = np.dot(input_data, weights) + bias
     
-    Z2 = dense(A1, W2, b2)
-    A2 = spongeprob(Z2,X)
+    if activation == 'sigmoid':
+        return 1 / (1 + np.exp(-linear_output))
+    elif activation == 'relu':
+        return np.maximum(0, linear_output)
+    else:
+        raise ValueError("Unsupported activation function.")
 
-    Z3 = dense(A2, W3, b3)
-    A3 = softmax(Z3, temperature)
+def non_essentialist_spongeprob(input_vector, vocab, temperature=1.0, depth=3):
+    """Calculate probabilities that adapt based on input with recursive decomposition."""
+    if depth == 0 or len(input_vector) == 0:
+        return np.ones(len(vocab)) / len(vocab)  # Base case: uniform distribution
 
-    return A3, A2, A1
+    split_idx = len(input_vector) // 4
+    left_input = input_vector[:split_idx]
+    right_input = input_vector[split_idx:]
+
+    left_probs = non_essentialist_spongeprob(left_input, vocab, temperature, depth - 1)
+    right_probs = non_essentialist_spongeprob(right_input, vocab, temperature, depth - 1)
+
+    combined_probs = (left_probs + right_probs) / 2  # Average to allow for flexibility
+    return softmax(combined_probs / temperature)
+
+def apply_rule_based_logic(A):
+    """A simple rule-based system to modify output based on conditions."""
+    # Example rules (customize based on your logic requirements)
+    if np.mean(A) > 0.5:  # If average activation is high
+        return A * 1.1  # Boost output
+    elif np.mean(A) < 0.2:  # If average activation is low
+        return A * 0.9  # Damp output
+    return A  # No change if conditions are not met
+
+def invert_probabilities(probs):
+    """Invert the probabilities."""
+    return 1 - probs
+
+def forward_pass_with_gofai(X, W1, b1, W2, b2, W3, b3, activation='sigmoid', temperature=1.0):
+    """Perform a forward pass through the network using non-essentialism and GOFAI techniques."""
+    
+    Z1 = adaptive_dense(X, W3, b3, activation=activation)
+    A1 = non_essentialist_spongeprob(Z1, X, temperature)
+    A1 = apply_rule_based_logic(A1)  # Apply GOFAI logic rules
+
+    Z2 = adaptive_dense(A1, W2, b2, activation=activation)
+    A2 = non_essentialist_spongeprob(Z2, X, temperature)
+    A2 = apply_rule_based_logic(A2)  # Apply GOFAI logic rules
+
+    Z3 = adaptive_dense(A2, W3, b3, activation=activation)
+    A3 = softmax(Z3 / temperature)  # Apply softmax with temperature scaling
+    A3 = apply_rule_based_logic(A3)  # Final adjustment with rules
+
+    # Invert probabilities at the end
+    inverted_probs = invert_probabilities(A3)
+
+    return inverted_probs, A2, A1
+
     
 def chat_with_neural_network(model_params, vocab, user_input, generate_length, n=3):
     W1, b1, W2, b2, W3, b3, ngram_frequencies = model_params
@@ -83,13 +132,13 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
         input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
         
         # Forward pass with 3D tensors
-        A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)#active memory?
+        A3, A2, A1 = forward_pass_with_gofai(input_vector, W1, b1, W2, b2, W3, b3)#active memory?
         
         probabilities = softmax(A3, temperature)
         
         # Sample from the distribution
 
-        predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)
+        predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)+1
         
         ngram_word = vocab[predicted_idx] if predicted_idx < len(vocab) else tuple([''])
         output.append(' '.join(ngram_word))
@@ -120,7 +169,7 @@ def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
     b3 = np.zeros(hidden_dim)
     for epoch in range(epochs):
         # Forward pass with 3 layers
-        A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)
+        A3, A2, A1 = forward_pass_with_gofai(input_vector, W1, b1, W2, b2, W3, b3)
         
         # Backpropagation (3 layers)
         dA3 = A3 - target_vector
