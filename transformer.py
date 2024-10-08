@@ -1,4 +1,4 @@
-#transformer v0.28
+#transformer v0.29
 import numpy as np
 import pickle
 import re
@@ -36,20 +36,35 @@ def dense(input_data, weights, bias):
     # Apply activation function
     return sigmoid(z)
     
-def spongeprob(linear):
-    predicted_indices = []
-    for i in range(len(linear)):
-        predicted_idx = np.random.choice(range(len(linear)), p=softmax(linear, temperature=1.0))
-        predicted_indices.append(predicted_idx)  # Store predicted index
-    return softmax(predicted_indices)
+def spongeprob(input_vector, vocab, depth=3):
+    """
+    A recursive process to calculate probabilities in a hylomorphic manner.
+    Decomposes input and reconstructs probabilities step-by-step.
+    """
+    if depth == 0 or len(input_vector) == 0:
+        return np.ones(len(vocab)) / len(vocab)  # Base case: uniform distribution
+
+    # Decomposition: break input_vector into smaller parts
+    split_idx = len(input_vector) // 2
+    left_input = input_vector[:split_idx]
+    right_input = input_vector[split_idx:]
+
+    # Recursively calculate probabilities for left and right parts
+    left_probs = spongeprob(left_input, vocab, depth - 1)
+    right_probs = spongeprob(right_input, vocab, depth - 1)
+
+    # Composition: combine the probabilities
+    combined_probs = (np.dot(left_probs, right_probs) / 2) + right_probs
+
+    return softmax(combined_probs)  # Apply softmax to get valid probabilities
     
 def forward_pass(X, W1, b1, W2, b2, W3, b3):
     """Perform a forward pass through the network."""
     Z1 = dense(X, W3, b3)
-    A1 = spongeprob(Z1)
+    A1 = spongeprob(Z1,X)
     
     Z2 = dense(A1, W2, b2)
-    A2 = spongeprob(Z2)
+    A2 = spongeprob(Z2,X)
 
     Z3 = dense(A2, W3, b3)
     A3 = softmax(Z3, temperature)
@@ -197,16 +212,6 @@ def build_ngram_model(text, n):
         ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
         
     return ngram_counts
-
-def penalize_repeats(probabilities, recent_ngrams, vocab):
-    """Apply penalty to probabilities based on recently generated n-grams."""
-    for i, ngram in enumerate(vocab):
-        if ngram in recent_ngrams and i < len(probabilities)-1:
-            probabilities[i+1] *= penalty_factor  # Apply penalty
-    
-    # Normalize probabilities to sum to 1 after penalty
-    total_prob = sum(probabilities)
-    return [p / total_prob for p in probabilities]
     
 def main():
     with open("test.txt", encoding="UTF-8") as f:
