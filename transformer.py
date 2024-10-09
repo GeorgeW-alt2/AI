@@ -1,10 +1,10 @@
-#transformer v0.31
+#transformer v0.32
 import numpy as np
 import pickle
 import re
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 227
+KB_MEMORY_UNCOMPRESSED = 1227
 learning_rate = 0.01
 epochs = 10
 n = 3
@@ -97,11 +97,10 @@ def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
     b3 = np.zeros(hidden_dim)
     for epoch in range(epochs):
         # Forward pass with 3 layers
-        A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b3, W3, b3)
+        A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b3, W3, b3)  # coherence tweak
         
-        target_dict = build_ngram_model(text_data, n)
-        target_vector = A3  # Use vector instead of scalar
-        b2 = target_vector # hack requires equal hidden_dim and KB_UNCOMPRESSED
+        target_vector = A3  # coherence tweak
+        b2 = target_vector # coherence tweak
 
         # Backpropagation (3 layers)
         dA3 = A3 - target_vector
