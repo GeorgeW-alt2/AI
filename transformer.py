@@ -1,10 +1,10 @@
-#transformer v0.32
+#transformer v0.33
 import numpy as np
 import pickle
 import re
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1227
+KB_MEMORY_UNCOMPRESSED = 3227
 learning_rate = 0.01
 epochs = 10
 n = 3
@@ -35,15 +35,36 @@ def dense(input_data, weights, bias):
     z = np.dot(input_data, weights) + bias
     # Apply activation function
     return sigmoid(z)
-   
+    
+def spongeprob(input_vector, vocab, depth=3):
+    """
+    A recursive process to calculate probabilities in a hylomorphic manner.
+    Decomposes input and reconstructs probabilities step-by-step.
+    """
+    if depth == 0 or len(input_vector) == 0:
+        return np.ones(len(vocab)) / len(vocab)  # Base case: uniform distribution
+
+    # Decomposition: break input_vector into smaller parts
+    split_idx = len(input_vector) // 2
+    left_input = input_vector[:split_idx]
+    right_input = input_vector[split_idx:]
+
+    # Recursively calculate probabilities for left and right parts
+    left_probs = spongeprob(left_input, vocab, depth - 1)
+    right_probs = spongeprob(right_input, vocab, depth - 1)
+
+    # Composition: combine the probabilities
+    combined_probs = (np.dot(left_probs, right_probs) / 2) + right_probs
+
+    return softmax(combined_probs)  # Apply softmax to get valid probabilities
     
 def forward_pass(X, W1, b1, W2, b2, W3, b3):
     """Perform a forward pass through the network."""
     Z1 = dense(X, W3, b3)
-    A1 = np.dot(Z1,X)
+    A1 = spongeprob(Z1,X)
     
     Z2 = dense(A1, W2, b2)
-    A2 = np.dot(Z2,X)
+    A2 = spongeprob(Z2,X)
 
     Z3 = dense(A2, W3, b3)
     A3 = softmax(Z3, temperature)
@@ -64,7 +85,7 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
         # Forward pass with 3D tensors
         A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)#active memory?
         
-        probabilities = softmax(A3, temperature)
+        probabilities = softmax(A3[::-2], temperature)
         
         # Sample from the distribution
 
@@ -84,7 +105,8 @@ def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
     
     input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
 
-    
+    target_dict = build_ngram_model(text_data, n)
+    target_vector = dict_to_vector(target_dict, vocab)  # Use vector instead of scalar
 
     input_dim = len(vocab)  # Vector context
     output_dim = len(vocab)
@@ -93,15 +115,13 @@ def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
     W1 = np.random.randn(input_dim, hidden_dim) * 0.01
     b1 = input_vector # hack requires equal hidden_dim and KB_UNCOMPRESSED
     W2 = np.random.randn(hidden_dim, hidden_dim) * 0.01  # Added second layer weights
+    b2 = target_vector # hack requires equal hidden_dim and KB_UNCOMPRESSED
     W3 = np.random.randn(hidden_dim, output_dim) * 0.01  # Output layer weights
     b3 = np.zeros(hidden_dim)
     for epoch in range(epochs):
         # Forward pass with 3 layers
-        A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b3, W3, b3)  # coherence tweak
+        A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)
         
-        target_vector = A3  # coherence tweak
-        b2 = target_vector # coherence tweak
-
         # Backpropagation (3 layers)
         dA3 = A3 - target_vector
         dZ3 = dA3  # Gradient for softmax
