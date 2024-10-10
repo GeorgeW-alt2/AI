@@ -1,4 +1,4 @@
-#transformer v0.42
+#transformer v0.43
 from itertools import permutations
 import numpy as np
 import pickle
@@ -6,7 +6,7 @@ import math
 import re
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = -1
+KB_MEMORY_UNCOMPRESSED = 1000
 learning_rate = 0.01
 epochs = 10
 n = 3
@@ -48,7 +48,7 @@ def chat(vocab, user_input, generate_length, n=3):
         target_vector = softmax( target_vector[::2], temperature)
         max_rolls = len(input_vector)  # Maximum shifts we allow
         for _ in range(max_rolls):
-            if np.all(np.isclose(input_vector, np.dot(input_vector, target_vector))):
+            if np.all(np.fmin(input_vector, np.dot(input_vector, target_vector))):
                 break
             target_vector = np.roll(input_vector, 1)  # Shift A3 by one position
         probabilities = softmax( target_vector, temperature)
@@ -57,7 +57,7 @@ def chat(vocab, user_input, generate_length, n=3):
 
         predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)
         
-        ngram_word = vocab[predicted_idx] if predicted_idx < len(vocab) else tuple([''])
+        ngram_word = vocab[predicted_idx]
         output.append(' '.join(ngram_word))
         
         current_input = ' '.join(output)
