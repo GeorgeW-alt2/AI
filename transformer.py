@@ -1,4 +1,4 @@
-#transformer v0.45
+#transformer v0.46
 from itertools import permutations
 import numpy as np
 import pickle
@@ -78,7 +78,11 @@ def chat(vocab, user_input, generate_length, n=3):
         close_indices = np.where(isclose_indices)[-1]
 
         if len(close_indices) > 0:
-            predicted_idx = np.random.choice(close_indices, p=sorted_probs)
+            predicted_idx = np.random.choice(close_indices,p=sorted_probs)
+        else:
+            # If no close match is found, fallback to sampling using the original probabilities
+            predicted_idx = np.random.choice(range(len(sorted_probs)), p=sorted_probs)
+
         # Get the predicted n-gram and append to the output
         ngram_word = sorted_vocab[predicted_idx]
         output.append(' '.join(ngram_word))
