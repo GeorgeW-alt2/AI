@@ -1,4 +1,4 @@
-#transformer v0.43
+#transformer v0.44
 from itertools import permutations
 import numpy as np
 import pickle
@@ -48,7 +48,7 @@ def chat(vocab, user_input, generate_length, n=3):
         target_vector = softmax( target_vector[::2], temperature)
         max_rolls = len(input_vector)  # Maximum shifts we allow
         for _ in range(max_rolls):
-            if np.all(np.fmin(input_vector, np.dot(input_vector, target_vector))):
+            if np.all(np.fmax(input_vector, np.dot(input_vector, target_vector))):
                 break
             target_vector = np.roll(input_vector, 1)  # Shift A3 by one position
         probabilities = softmax( target_vector, temperature)
