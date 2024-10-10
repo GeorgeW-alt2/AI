@@ -1,18 +1,16 @@
-#transformer v0.48
-from itertools import permutations
+#transformer v0.50
 import numpy as np
 import pickle
-import math
 import re
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY = 1000
+VOCAB_MEMORY = 5000
 learning_rate = 0.01
 epochs = 10
 n = 3
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
-
 # Tokenization
 def tokenize(text):
     return text.split()
@@ -21,61 +19,108 @@ def dict_to_vector(vector_dict, vocab):
     """Convert a dictionary of n-grams into a vector based on the vocabulary order."""
     vector = np.zeros(len(vocab))
     for i, ngram in enumerate(vocab):
-        vector[i] = vector_dict.get(ngram, 0) + 1
+        vector[i] = vector_dict.get(ngram, 0)
     return vector
 
-def softmax(x, temperature=0.7):
-    """Softmax function with temperature."""
-    y = np.array(x) / temperature
-    exp_x = np.exp(x - np.max(y))
+def softmax(x):
+    """Softmax function."""
+    exp_x = np.exp(x - np.max(x))
     return exp_x / np.sum(exp_x)
     
-# Simulate PnP 2D transformations on the n-gram frequency vectors
-def apply_2d_pnp_transform(vector):
-    """Apply 2D transformations (like rotation or translation) to the input vector."""
-    angle = np.random.uniform(-np.pi/4, np.pi/4)  # Random rotation angle
-    rotation_matrix = np.array([[np.cos(angle), -np.sin(angle)],
-                                [np.sin(angle), np.cos(angle)]])
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
     
-    # Map 1D vector to 2D points by creating (x, y) pairs
-    vector_2d = np.column_stack((vector, np.roll(vector, 1)))
+def dense(input_data, weights):
+    z = np.dot(input_data, weights)
+    # Apply activation function
+    return sigmoid(z)
     
-    # Apply rotation to simulate perspective change
-    transformed_vector = np.dot(vector_2d, rotation_matrix.T)
+def compute_ngram_frequencies(text, n):
+    """Compute the frequency of each n-gram in the given text."""
+    words = text.split()
+    ngram_counts = {}
     
-    # Convert back to a 1D vector (e.g., by taking the x-coordinates)
-    return transformed_vector[:, 0]  # Use one dimension after transformation
+    for i in range(len(words) - n + 1):
+        ngram = tuple(words[i:i+n])
+        if ngram in ngram_counts:
+            ngram_counts[ngram] += 1
+        else:
+            ngram_counts[ngram] = 1
     
-def chat(vocab, user_input, generate_length, n=3):
+    return ngram_counts
+    
+def chat_with_neural_network(model_params, vocab, user_input, generate_length, n=3):
+    W1 = model_params
     vocab_size = len(vocab)
     output = []
     current_input = user_input
+    current_attention = ""
+    for i in range(len(W1)-1):
+        attention_dict = build_ngram_model(current_attention, n)
+        attention_vector = dict_to_vector(attention_dict, vocab)
+        probabilities = softmax(W1[i])
 
-    for length in range(generate_length):
-
-        # Compute the n-gram frequencies and convert them to vectors
-        input_dict = compute_ngram_frequencies(current_input, n)
-        input_vector = dict_to_vector(input_dict, vocab)
-
-        # Get the final softmax probabilities
-        probabilities = softmax(apply_2d_pnp_transform(input_vector), temperature)
-
-        predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)
-        
-        # Get the predicted n-gram and append to the output
-        ngram_word = vocab[predicted_idx]
-        output.append(' '.join(ngram_word))
-
-        # Update current_input with the new output
-        current_input = ' '.join(ngram_word)
-
+        if np.any(np.isclose(attention_vector, W1[i])):
+            # Sample from the distribution
+            predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)
+            
+            ngram_word = vocab[predicted_idx] if predicted_idx < len(vocab) else tuple([''])
+            
+            output.append(' '.join(ngram_word))
+            current_attention = ' '.join(ngram_word)
     return ' '.join(output)
+    
+def build_ngram_model(text, n):
+    text = text.split()
+    ngrams = []
+    for i in range(len(text) - n + 1):
+        ngram = tuple(text[i:i+n])
+        ngrams.append(ngram)
+    ngram_counts = {}
+    for ngram in ngrams:
+        ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
+    return ngram_counts
+    
+def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
+    sentences = text_data.split(".")[:KB_MEMORY]
+
+    # Compute n-gram frequencies from the training data
+    freq_dict = compute_ngram_frequencies(text_data, n)  # Compute n-gram frequencies
+
+    input_dim = len(vocab)  # Vector context
+    output_dim = len(vocab)
+
+    W1 = []
+    for sentence in sentences:
+        input_dict = build_ngram_model(sentence, n)
+
+        # Filter the n-grams based on frequency threshold
+        input_dict = {ngram: count for ngram, count in input_dict.items() if input_dict.get(ngram, 0) >= 2}
+        
+        input_vector = dict_to_vector(input_dict, vocab)
+        W1.append(input_vector)
+
+    # Continue with the rest of your training logic
+    for i in range(len(W1)-2):
+        W1[i] = W1[i] + W1[i+1]
+        print(f"Epoch {i}")
+
+    return W1
+
+def save_model(model_params, filepath):
+    with open(filepath, 'wb') as f:
+        pickle.dump(model_params, f)
+
+def load_model(filepath):
+    with open(filepath, 'rb') as f:
+        return pickle.load(f)
         
 # Preprocess text by removing stopwords
 def preprocess_text(text):
     tokens = tokenize(text)
-
-    return tokens
+    stop_words = ['the', 'a', 'an', 'and', 'in', 'to']
+    filtered_tokens = [token for token in tokens if token not in stop_words]
+    return filtered_tokens
     
 def build_vocabulary(text_data, n):
     
@@ -96,36 +141,28 @@ def build_vocabulary(text_data, n):
     
     return vocab
 
-def compute_ngram_frequencies(text, n):
-    """Compute the frequency of each n-gram (including permutations) in the given text."""
-    words = text.split()
-    ngram_counts = {}
-    
-    for i in range(len(words) - n + 1):
-        # Get the n-gram
-        ngrams = tuple(words[i:i+n])
-        # Add all permutations of this n-gram to the counts
-        for perm in ngrams:
-            if perm in ngram_counts:
-                ngram_counts[perm] += 1
-            else:
-                ngram_counts[perm] = 1
-    
-    return ngram_counts
-    
 def main():
     with open("test.txt", encoding="UTF-8") as f:
         text_data = f.read()
 
-    # Build vocabulary based on n-grams that include permutations
-    vocab = build_vocabulary(text_data, n)[:KB_MEMORY_UNCOMPRESSED]
+    vocab = build_vocabulary(text_data, n)[:VOCAB_MEMORY]
     hidden_dim = len(vocab)
 
+    choice = input("Save new model/Load old model? [s/l]: ")
+    
+    if choice == 's':
+        model_params = train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs)
+        save_model(model_params, 'model.pkl')
+        print("Model saved.")
+    elif choice == 'l':
+        model_params = load_model('model.pkl')
+        print("Model loaded.")
+    
     while True:
         user_input = input("Enter text: ")
         
         # Generate n-grams sequentially
-        ngram_predictions = chat( vocab, chat( vocab, user_input, generate_length, n).lower(), generate_length, n).lower()
+        ngram_predictions = chat_with_neural_network(model_params, vocab, user_input, generate_length, n=n).lower()
 
         # Print the top 10 longest predictions
         print("Generated n-grams:", ngram_predictions)
