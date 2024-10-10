@@ -1,4 +1,4 @@
-#transformer v0.35
+#transformer v0.36
 from itertools import permutations
 import numpy as np
 import pickle
@@ -21,7 +21,7 @@ def dict_to_vector(vector_dict, vocab):
     """Convert a dictionary of n-grams into a vector based on the vocabulary order."""
     vector = np.zeros(len(vocab))
     for i, ngram in enumerate(vocab):
-        vector[i] = vector_dict.get(ngram, 0)
+        vector[i] = vector_dict.get(ngram, 0)+1
     return vector
 
 def softmax(x, temperature=1.0):
