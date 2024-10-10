@@ -1,4 +1,4 @@
-#transformer v0.41
+#transformer v0.42
 from itertools import permutations
 import numpy as np
 import pickle
@@ -6,7 +6,7 @@ import math
 import re
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 13227
+KB_MEMORY_UNCOMPRESSED = -1
 learning_rate = 0.01
 epochs = 10
 n = 3
