@@ -1,4 +1,4 @@
-#transformer v0.39
+#transformer v0.41
 from itertools import permutations
 import numpy as np
 import pickle
@@ -48,7 +48,7 @@ def chat(vocab, user_input, generate_length, n=3):
         target_vector = softmax( target_vector[::2], temperature)
         max_rolls = len(input_vector)  # Maximum shifts we allow
         for _ in range(max_rolls):
-            if np.all(np.isclose(input_vector, target_vector)):
+            if np.all(np.isclose(input_vector, np.dot(input_vector, target_vector))):
                 break
             target_vector = np.roll(input_vector, 1)  # Shift A3 by one position
         probabilities = softmax( target_vector, temperature)
@@ -118,7 +118,7 @@ def main():
         user_input = input("Enter text: ")
         
         # Generate n-grams sequentially
-        ngram_predictions = chat( vocab, user_input, generate_length, n).lower()
+        ngram_predictions = chat( vocab, chat( vocab, user_input, generate_length, n).lower(), generate_length, n).lower()
 
         # Print the top 10 longest predictions
         print("Generated n-grams:", ngram_predictions)
