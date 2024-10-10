@@ -1,4 +1,4 @@
-#transformer v0.37
+#transformer v0.38
 from itertools import permutations
 import numpy as np
 import pickle
@@ -6,7 +6,7 @@ import math
 import re
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 3227
+KB_MEMORY_UNCOMPRESSED = 13227
 learning_rate = 0.01
 epochs = 10
 n = 3
@@ -21,13 +21,13 @@ def dict_to_vector(vector_dict, vocab):
     """Convert a dictionary of n-grams into a vector based on the vocabulary order."""
     vector = np.zeros(len(vocab))
     for i, ngram in enumerate(vocab):
-        vector[i] = vector_dict.get(ngram, 0)+1
+        vector[i] = vector_dict.get(ngram, 0) + 1
     return vector
 
-def softmax(x, temperature=1.0):
+def softmax(x, temperature=0.7):
     """Softmax function with temperature."""
-    x = np.array(x) / temperature
-    exp_x = np.exp(x - np.max(x))
+    y = np.array(x) / temperature
+    exp_x = np.exp(y - np.max(x))
     return exp_x / np.sum(exp_x)
 
 def chat(vocab, user_input, generate_length, n=3):
@@ -51,7 +51,7 @@ def chat(vocab, user_input, generate_length, n=3):
             if np.all(np.isclose(input_vector, target_vector)):
                 break
             target_vector = np.roll(input_vector, 1)  # Shift A3 by one position
-        probabilities = softmax( target_vector[::2], temperature)
+        probabilities = softmax( target_vector, temperature)
         
         # Sample from the distribution
 
