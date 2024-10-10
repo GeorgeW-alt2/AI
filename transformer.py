@@ -1,4 +1,4 @@
-#transformer v0.38
+#transformer v0.39
 from itertools import permutations
 import numpy as np
 import pickle
@@ -27,7 +27,7 @@ def dict_to_vector(vector_dict, vocab):
 def softmax(x, temperature=0.7):
     """Softmax function with temperature."""
     y = np.array(x) / temperature
-    exp_x = np.exp(y - np.max(x))
+    exp_x = np.exp(x - np.max(y))
     return exp_x / np.sum(exp_x)
 
 def chat(vocab, user_input, generate_length, n=3):
