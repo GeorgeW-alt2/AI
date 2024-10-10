@@ -1,4 +1,4 @@
-#transformer v0.46
+#transformer v0.48
 from itertools import permutations
 import numpy as np
 import pickle
@@ -6,7 +6,7 @@ import math
 import re
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = -1
+KB_MEMORY_UNCOMPRESSED = 1000
 learning_rate = 0.01
 epochs = 10
 n = 3
@@ -29,7 +29,23 @@ def softmax(x, temperature=0.7):
     y = np.array(x) / temperature
     exp_x = np.exp(x - np.max(y))
     return exp_x / np.sum(exp_x)
-
+    
+# Simulate PnP 2D transformations on the n-gram frequency vectors
+def apply_2d_pnp_transform(vector):
+    """Apply 2D transformations (like rotation or translation) to the input vector."""
+    angle = np.random.uniform(-np.pi/4, np.pi/4)  # Random rotation angle
+    rotation_matrix = np.array([[np.cos(angle), -np.sin(angle)],
+                                [np.sin(angle), np.cos(angle)]])
+    
+    # Map 1D vector to 2D points by creating (x, y) pairs
+    vector_2d = np.column_stack((vector, np.roll(vector, 1)))
+    
+    # Apply rotation to simulate perspective change
+    transformed_vector = np.dot(vector_2d, rotation_matrix.T)
+    
+    # Convert back to a 1D vector (e.g., by taking the x-coordinates)
+    return transformed_vector[:, 0]  # Use one dimension after transformation
+    
 def chat(vocab, user_input, generate_length, n=3):
     vocab_size = len(vocab)
     output = []
@@ -41,57 +57,19 @@ def chat(vocab, user_input, generate_length, n=3):
         input_dict = compute_ngram_frequencies(current_input, n)
         input_vector = dict_to_vector(input_dict, vocab)
 
-        target_dict = compute_ngram_frequencies(' '.join(np.roll(current_input[-(n-1):].split(), shift=-2)), n)
-        target_vector = dict_to_vector(target_dict, vocab)
-
-        # Forward pass with 3D tensors
-        # Apply softmax to the vectors
-        input_vector = softmax(input_vector[::2], temperature)
-        target_vector = softmax(target_vector[::2], temperature)
-
-        # Perform a rolling adjustment between input and target vectors
-        max_rolls = len(input_vector)
-        for _ in range(max_rolls):
-            if np.all(np.fmax(input_vector, np.fmin(input_vector, target_vector))):
-                break
-            target_vector = np.roll(input_vector, 1)
-
         # Get the final softmax probabilities
-        probabilities = softmax(target_vector, temperature)
+        probabilities = softmax(apply_2d_pnp_transform(input_vector), temperature)
 
-        # Zip the vocab with the probabilities
-        vocab_with_probs = list(zip(vocab, probabilities))
-
-        # Sort vocab by the associated probabilities in descending order
-        vocab_with_probs_sorted = sorted(vocab_with_probs, key=lambda x: x[1], reverse=True)
-
-        # Unzip to get sorted vocab and probabilities
-        sorted_vocab, sorted_probs = zip(*vocab_with_probs_sorted)
-
-        # Generate a random reference value for comparison
-        random_value = np.random.rand()
-
-        # Use np.isclose to find the index closest to this random value
-        isclose_indices = np.isclose(sorted_probs, random_value, atol=0.05)
-
-        # Get the indices that match the close condition
-        close_indices = np.where(isclose_indices)[-1]
-
-        if len(close_indices) > 0:
-            predicted_idx = np.random.choice(close_indices,p=sorted_probs)
-        else:
-            # If no close match is found, fallback to sampling using the original probabilities
-            predicted_idx = np.random.choice(range(len(sorted_probs)), p=sorted_probs)
-
+        predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)
+        
         # Get the predicted n-gram and append to the output
-        ngram_word = sorted_vocab[predicted_idx]
+        ngram_word = vocab[predicted_idx]
         output.append(' '.join(ngram_word))
 
         # Update current_input with the new output
-        current_input = ' '.join(output)
+        current_input = ' '.join(ngram_word)
 
     return ' '.join(output)
-
         
 # Preprocess text by removing stopwords
 def preprocess_text(text):
