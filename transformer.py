@@ -1,12 +1,13 @@
-#transformer v0.33
+#transformer v0.34
 import numpy as np
 import pickle
+import math
 import re
 
 # Constants
 KB_MEMORY_UNCOMPRESSED = 3227
 learning_rate = 0.01
-epochs = 10
+epochs = 3
 n = 3
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
@@ -36,56 +37,30 @@ def dense(input_data, weights, bias):
     # Apply activation function
     return sigmoid(z)
     
-def spongeprob(input_vector, vocab, depth=3):
-    """
-    A recursive process to calculate probabilities in a hylomorphic manner.
-    Decomposes input and reconstructs probabilities step-by-step.
-    """
-    if depth == 0 or len(input_vector) == 0:
-        return np.ones(len(vocab)) / len(vocab)  # Base case: uniform distribution
-
-    # Decomposition: break input_vector into smaller parts
-    split_idx = len(input_vector) // 2
-    left_input = input_vector[:split_idx]
-    right_input = input_vector[split_idx:]
-
-    # Recursively calculate probabilities for left and right parts
-    left_probs = spongeprob(left_input, vocab, depth - 1)
-    right_probs = spongeprob(right_input, vocab, depth - 1)
-
-    # Composition: combine the probabilities
-    combined_probs = (np.dot(left_probs, right_probs) / 2) + right_probs
-
-    return softmax(combined_probs)  # Apply softmax to get valid probabilities
     
-def forward_pass(X, W1, b1, W2, b2, W3, b3):
-    """Perform a forward pass through the network."""
-    Z1 = dense(X, W3, b3)
-    A1 = spongeprob(Z1,X)
-    
-    Z2 = dense(A1, W2, b2)
-    A2 = spongeprob(Z2,X)
-
-    Z3 = dense(A2, W3, b3)
-    A3 = softmax(Z3, temperature)
-
-    return A3, A2, A1
-    
-def chat_with_neural_network(model_params, vocab, user_input, generate_length, n=3):
-    W1, b1, W2, b2, W3, b3, ngram_frequencies = model_params
+def chat_with_neural_network(vocab, user_input, generate_length, n=3):
     vocab_size = len(vocab)
     output = []
     current_input = user_input
     for length in range(generate_length):
 
 
-        input_dict = compute_ngram_frequencies(' '.join(np.roll(current_input[-(n-1):].split(), shift = -2)), n)
+        input_dict = compute_ngram_frequencies(current_input, n)
         input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
         
-        # Forward pass with 3D tensors
-        A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)#active memory?
+        target_dict = compute_ngram_frequencies(' '.join(np.roll(current_input[-(n-1):].split(), shift = -2)), n)
+        target_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
         
-        probabilities = softmax(A3[::-2], temperature)
+        # Forward pass with 3D tensors
+        # Align A3 using np.roll until it is close to input_vector and target_vector
+        input_vector = np.exp(input_vector)
+        target_vector = np.exp(target_vector)
+        max_rolls = len(input_vector)  # Maximum shifts we allow
+        for _ in range(max_rolls):
+            if np.all(np.isclose(input_vector, target_vector)):
+                break
+            input_vector = np.roll(input_vector, 1)  # Shift A3 by one position
+        probabilities = softmax( target_vector[::2], temperature)
         
         # Sample from the distribution
 
@@ -97,56 +72,7 @@ def chat_with_neural_network(model_params, vocab, user_input, generate_length, n
         current_input = ' '.join(output)
     
     return ' '.join(output)
-    
-def train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs):
-    # Compute n-gram frequencies from the training data
-    
-    input_dict = build_ngram_model(text_data, n)
-    
-    input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
 
-    target_dict = build_ngram_model(text_data, n)
-    target_vector = dict_to_vector(target_dict, vocab)  # Use vector instead of scalar
-
-    input_dim = len(vocab)  # Vector context
-    output_dim = len(vocab)
-
-    # Initialize weights for 3 layers
-    W1 = np.random.randn(input_dim, hidden_dim) * 0.01
-    b1 = input_vector # hack requires equal hidden_dim and KB_UNCOMPRESSED
-    W2 = np.random.randn(hidden_dim, hidden_dim) * 0.01  # Added second layer weights
-    b2 = target_vector # hack requires equal hidden_dim and KB_UNCOMPRESSED
-    W3 = np.random.randn(hidden_dim, output_dim) * 0.01  # Output layer weights
-    b3 = np.zeros(hidden_dim)
-    for epoch in range(epochs):
-        # Forward pass with 3 layers
-        A3, A2, A1 = forward_pass(input_vector, W1, b1, W2, b2, W3, b3)
-        
-        # Backpropagation (3 layers)
-        dA3 = A3 - target_vector
-        dZ3 = dA3  # Gradient for softmax
-        dW3 = np.outer(A2, dZ3)
-        db3 = dZ3
-
-        dA2 = np.dot(W3, dZ3) * (1 - A2 ** 2)  # Gradient w.r.t A2
-        dW2 = np.outer(A1, dA2)
-        db2 = dA2
-
-        dA1 = np.dot(W2, dA2) * (1 - A1 ** 2)  # Gradient w.r.t A1
-        dW1 = np.outer(input_vector, dA1) - target_vector
-        db1 = dA1
-
-        # Update parameters
-        W1 -= learning_rate * dW1
-        b1 -= learning_rate * db1
-        W2 -= learning_rate * dW2
-        b2 -= learning_rate * db2
-        W3 -= learning_rate * dW3
-        b3 -= learning_rate * db3
-
-        print(f"Epoch {epoch+1}")
-
-    return W1, b1, W2, b2, W3, b3,input_dict
 
 def save_model(model_params, filepath):
     with open(filepath, 'wb') as f:
@@ -189,9 +115,9 @@ def compute_ngram_frequencies(text, n):
     
     for i in range(len(words) - n + 1):
         # Get the n-gram
-        ngram = tuple(words[i:i+n])
+        ngrams = tuple(words[i:i+n])
         # Add all permutations of this n-gram to the counts
-        for perm in permutations(ngram):
+        for perm in ngrams:
             if perm in ngram_counts:
                 ngram_counts[perm] += 1
             else:
@@ -202,10 +128,11 @@ def compute_ngram_frequencies(text, n):
 def build_ngram_model(text, n):
     """Build the n-gram model including permutations."""
     ngrams = []
-    for i in range(len(text) - n + 1):
-        ngram = tuple(text[i:i+n])
+    words = text.split()
+    for i in range(len(words) - n + 1):
+        ngram = tuple(words[i:i+n])
         # Add all permutations of this n-gram to the list
-        ngrams.extend(permutations(ngram))
+        ngrams.extend(ngram)
     
     ngram_counts = {}
     for ngram in ngrams:
@@ -221,21 +148,11 @@ def main():
     vocab = build_vocabulary(text_data, n)[:KB_MEMORY_UNCOMPRESSED]
     hidden_dim = len(vocab)
 
-    choice = input("Save new model/Load old model? [s/l]: ")
-    
-    if choice == 's':
-        model_params = train_model(hidden_dim, vocab, text_data, n, learning_rate, epochs)
-        save_model(model_params, 'model.pkl')
-        print("Model saved.")
-    elif choice == 'l':
-        model_params = load_model('model.pkl')
-        print("Model loaded.")
-    
     while True:
         user_input = input("Enter text: ")
         
         # Generate n-grams sequentially
-        ngram_predictions = chat_with_neural_network(model_params, vocab, user_input, generate_length, n).lower()
+        ngram_predictions = chat_with_neural_network( vocab, user_input, generate_length, n).lower()
 
         # Print the top 10 longest predictions
         print("Generated n-grams:", ngram_predictions)
