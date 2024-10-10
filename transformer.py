@@ -1,4 +1,5 @@
-#transformer v0.34
+#transformer v0.35
+from itertools import permutations
 import numpy as np
 import pickle
 import math
@@ -28,22 +29,12 @@ def softmax(x, temperature=1.0):
     x = np.array(x) / temperature
     exp_x = np.exp(x - np.max(x))
     return exp_x / np.sum(exp_x)
-    
-def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
-    
-def dense(input_data, weights, bias):
-    z = np.dot(input_data, weights) + bias
-    # Apply activation function
-    return sigmoid(z)
-    
-    
-def chat_with_neural_network(vocab, user_input, generate_length, n=3):
+
+def chat(vocab, user_input, generate_length, n=3):
     vocab_size = len(vocab)
     output = []
     current_input = user_input
     for length in range(generate_length):
-
 
         input_dict = compute_ngram_frequencies(current_input, n)
         input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
@@ -72,15 +63,6 @@ def chat_with_neural_network(vocab, user_input, generate_length, n=3):
         current_input = ' '.join(output)
     
     return ' '.join(output)
-
-
-def save_model(model_params, filepath):
-    with open(filepath, 'wb') as f:
-        pickle.dump(model_params, f)
-
-def load_model(filepath):
-    with open(filepath, 'rb') as f:
-        return pickle.load(f)
         
 # Preprocess text by removing stopwords
 def preprocess_text(text):
@@ -106,7 +88,6 @@ def build_vocabulary(text_data, n):
     vocab = list(set(ngrams))
     
     return vocab
-from itertools import permutations
 
 def compute_ngram_frequencies(text, n):
     """Compute the frequency of each n-gram (including permutations) in the given text."""
@@ -124,21 +105,6 @@ def compute_ngram_frequencies(text, n):
                 ngram_counts[perm] = 1
     
     return ngram_counts
-
-def build_ngram_model(text, n):
-    """Build the n-gram model including permutations."""
-    ngrams = []
-    words = text.split()
-    for i in range(len(words) - n + 1):
-        ngram = tuple(words[i:i+n])
-        # Add all permutations of this n-gram to the list
-        ngrams.extend(ngram)
-    
-    ngram_counts = {}
-    for ngram in ngrams:
-        ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
-        
-    return ngram_counts
     
 def main():
     with open("test.txt", encoding="UTF-8") as f:
@@ -152,7 +118,7 @@ def main():
         user_input = input("Enter text: ")
         
         # Generate n-grams sequentially
-        ngram_predictions = chat_with_neural_network( vocab, user_input, generate_length, n).lower()
+        ngram_predictions = chat( vocab, user_input, generate_length, n).lower()
 
         # Print the top 10 longest predictions
         print("Generated n-grams:", ngram_predictions)
