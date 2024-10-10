@@ -1,4 +1,4 @@
-#transformer v0.36
+#transformer v0.37
 from itertools import permutations
 import numpy as np
 import pickle
@@ -8,7 +8,7 @@ import re
 # Constants
 KB_MEMORY_UNCOMPRESSED = 3227
 learning_rate = 0.01
-epochs = 3
+epochs = 10
 n = 3
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
@@ -44,13 +44,13 @@ def chat(vocab, user_input, generate_length, n=3):
         
         # Forward pass with 3D tensors
         # Align A3 using np.roll until it is close to input_vector and target_vector
-        input_vector = np.exp(input_vector)
-        target_vector = np.exp(target_vector)
+        input_vector = softmax( input_vector[::2], temperature)
+        target_vector = softmax( target_vector[::2], temperature)
         max_rolls = len(input_vector)  # Maximum shifts we allow
         for _ in range(max_rolls):
             if np.all(np.isclose(input_vector, target_vector)):
                 break
-            input_vector = np.roll(input_vector, 1)  # Shift A3 by one position
+            target_vector = np.roll(input_vector, 1)  # Shift A3 by one position
         probabilities = softmax( target_vector[::2], temperature)
         
         # Sample from the distribution
