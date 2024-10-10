@@ -6,7 +6,7 @@ import math
 import re
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY_UNCOMPRESSED = -1
 learning_rate = 0.01
 epochs = 10
 n = 3
