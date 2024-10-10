@@ -1,4 +1,4 @@
-#transformer v0.44
+#transformer v0.45
 from itertools import permutations
 import numpy as np
 import pickle
@@ -34,35 +34,60 @@ def chat(vocab, user_input, generate_length, n=3):
     vocab_size = len(vocab)
     output = []
     current_input = user_input
+
     for length in range(generate_length):
 
+        # Compute the n-gram frequencies and convert them to vectors
         input_dict = compute_ngram_frequencies(current_input, n)
-        input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
-        
-        target_dict = compute_ngram_frequencies(' '.join(np.roll(current_input[-(n-1):].split(), shift = -2)), n)
-        target_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
-        
-        # Forward pass with 3D tensors
-        # Align A3 using np.roll until it is close to input_vector and target_vector
-        input_vector = softmax( input_vector[::2], temperature)
-        target_vector = softmax( target_vector[::2], temperature)
-        max_rolls = len(input_vector)  # Maximum shifts we allow
-        for _ in range(max_rolls):
-            if np.all(np.fmax(input_vector, np.dot(input_vector, target_vector))):
-                break
-            target_vector = np.roll(input_vector, 1)  # Shift A3 by one position
-        probabilities = softmax( target_vector, temperature)
-        
-        # Sample from the distribution
+        input_vector = dict_to_vector(input_dict, vocab)
 
-        predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)
-        
-        ngram_word = vocab[predicted_idx]
+        target_dict = compute_ngram_frequencies(' '.join(np.roll(current_input[-(n-1):].split(), shift=-2)), n)
+        target_vector = dict_to_vector(target_dict, vocab)
+
+        # Forward pass with 3D tensors
+        # Apply softmax to the vectors
+        input_vector = softmax(input_vector[::2], temperature)
+        target_vector = softmax(target_vector[::2], temperature)
+
+        # Perform a rolling adjustment between input and target vectors
+        max_rolls = len(input_vector)
+        for _ in range(max_rolls):
+            if np.all(np.fmax(input_vector, np.fmin(input_vector, target_vector))):
+                break
+            target_vector = np.roll(input_vector, 1)
+
+        # Get the final softmax probabilities
+        probabilities = softmax(target_vector, temperature)
+
+        # Zip the vocab with the probabilities
+        vocab_with_probs = list(zip(vocab, probabilities))
+
+        # Sort vocab by the associated probabilities in descending order
+        vocab_with_probs_sorted = sorted(vocab_with_probs, key=lambda x: x[1], reverse=True)
+
+        # Unzip to get sorted vocab and probabilities
+        sorted_vocab, sorted_probs = zip(*vocab_with_probs_sorted)
+
+        # Generate a random reference value for comparison
+        random_value = np.random.rand()
+
+        # Use np.isclose to find the index closest to this random value
+        isclose_indices = np.isclose(sorted_probs, random_value, atol=0.05)
+
+        # Get the indices that match the close condition
+        close_indices = np.where(isclose_indices)[-1]
+
+        if len(close_indices) > 0:
+            predicted_idx = np.random.choice(close_indices, p=sorted_probs)
+        # Get the predicted n-gram and append to the output
+        ngram_word = sorted_vocab[predicted_idx]
         output.append(' '.join(ngram_word))
-        
+
+        # Update current_input with the new output
         current_input = ' '.join(output)
-    
+
     return ' '.join(output)
+
         
 # Preprocess text by removing stopwords
 def preprocess_text(text):
