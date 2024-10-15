@@ -1,4 +1,4 @@
-#transformer v0.03
+#transformer v0.04
 import numpy as np
 import pickle
 import re
@@ -46,7 +46,7 @@ def chat_with_neural_network(vocab, user_input, generate_length, n=3):
     current_input = user_input
     
     for i in range(generate_length):
-        input_dict = compute_ngram_frequencies(current_input[:i+3], n)
+        input_dict = compute_ngram_frequencies(current_input[:i], n)
         input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
         attention_vector = np.zeros_like(input_vector)
         attention_vector += input_vector[i-2]
