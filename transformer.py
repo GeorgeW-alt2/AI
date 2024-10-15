@@ -1,13 +1,16 @@
-#transformer v0.01
+#transformer v0.02
 import numpy as np
 import pickle
+import random
 import re
+import itertools
+
 # Constants
-KB_MEMORY_UNCOMPRESSED = -1
+KB_MEMORY_UNCOMPRESSED = 5000
 n = 3
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
-
+    
 # Tokenization
 def tokenize(text):
     return text.split()
@@ -25,7 +28,6 @@ def softmax(x, temperature):
     exp_x = np.exp(x - np.max(x))
     return exp_x / np.sum(exp_x)
     
-    
 def compute_ngram_frequencies(text, n):
     """Compute the frequency of each n-gram in the given text."""
     words = text.split()
@@ -39,42 +41,32 @@ def compute_ngram_frequencies(text, n):
             ngram_counts[ngram] = 1
     
     return ngram_counts
-    
+
 def chat_with_neural_network(vocab, user_input, generate_length, n=3):
     vocab_size = len(vocab)
     output = []
     current_input = user_input
     
     for i in range(generate_length):
-        input_dict = compute_ngram_frequencies(current_input, n)
+        input_dict = compute_ngram_frequencies(current_input[:i+3], n)
         input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
-        # Sum relevant attention vectors (if they are arrays) or handle them in a way that matches the shape
         attention_vector = np.zeros_like(input_vector)
         attention_vector += input_vector[i-2]
         attention_vector += input_vector[i-1]
         attention_vector += input_vector[i]
         probabilities = softmax(attention_vector, temperature)
-        probabilities = np.roll(probabilities,shift = i+1)
+        
         # Sample from the distribution
         predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)
-        
         ngram_word = vocab[predicted_idx] if predicted_idx < len(vocab) else tuple([''])
-        
-        output.append(' '.join(ngram_word))
+
+        # Add the n-gram to the output and update syllable count
+        ngram_str = ' '.join(ngram_word)
+        output.append(ngram_str)
         
         current_input = ' '.join(ngram_word)
     
     return ' '.join(output)
-    
-def build_ngram_model(text, n):
-    ngrams = []
-    for i in range(len(text) - n + 1):
-        ngram = tuple(text[i:i+n])
-        ngrams.append(ngram)
-    ngram_counts = {}
-    for ngram in ngrams:
-        ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
-    return ngram_counts
     
 def save_model(model_params, filepath):
     with open(filepath, 'wb') as f:
