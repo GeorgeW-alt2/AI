@@ -1,4 +1,4 @@
-#transformer v0.04
+#transformer v0.05
 import numpy as np
 import pickle
 import re
@@ -82,10 +82,10 @@ def preprocess_text(text):
 def build_vocabulary(text_data, n):
     
     # Remove symbols and numbers using regex
-    cleaned_text = re.sub(r'[^a-zA-Z\s]', '',  ' '.join(preprocess_text(text_data)))
+    #cleaned_text = re.sub(r'[^a-zA-Z\s]', '',  ' '.join(preprocess_text(text_data)))
     
     # Split text into words
-    words = cleaned_text.split()
+    words = ' '.join(preprocess_text(text_data)).split()
     
     # Filter out one-character words
     words = [word for word in words if len(word) > 1 or word == "a" or word == "i"]
