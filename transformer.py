@@ -1,31 +1,21 @@
-#transformer v0.07
-import numpy as np
-import pickle
-import re
+import random
+import math
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = -1
 n = 3
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
-    
+
 # Tokenization
 def tokenize(text):
     return text.split()
-    
-def dict_to_vector(vector_dict, vocab):
-    """Convert a dictionary of n-grams into a vector based on the vocabulary order."""
-    vector = np.zeros(len(vocab))
-    for i, ngram in enumerate(vocab):
-        vector[i] = vector_dict.get(ngram, 0) + 1
-    return vector
-    
+
 def softmax(x, temperature):
     """Softmax function with temperature."""
-    x = np.array(x) / temperature
-    exp_x = np.exp(x - np.max(x))
-    return exp_x / np.sum(exp_x)
-    
+    x = [i / temperature for i in x]
+    exp_x = [math.exp(i - max(x)) for i in x]
+    return [i / sum(exp_x) for i in exp_x]
+
 def compute_ngram_frequencies(text, n):
     """Compute the frequency of each n-gram in the given text."""
     words = text.split()
@@ -33,94 +23,117 @@ def compute_ngram_frequencies(text, n):
     
     for i in range(len(words) - n + 1):
         ngram = tuple(words[i:i+n])
-        if ngram in ngram_counts:
-            ngram_counts[ngram] += 1
-        else:
-            ngram_counts[ngram] = 1
+        ngram_counts[ngram] = ngram_counts.get(ngram, 0) + 1
     
     return ngram_counts
 
-def compute_attention_vector(input_ngrams, vocab, n):
+def compute_attention_vector(input_ngrams, vocab, training_responses, target_responses):
     """Compute an attention vector for the input n-grams."""
-    attention_scores = np.zeros(len(vocab))
+    attention_scores = [0] * len(vocab)
     
     for i, ngram in enumerate(vocab):
-        for j in range(len(input_ngrams)):
-            if input_ngrams[j] == ngram:
-                attention_scores[i] += 1  # Increment score for each matching n-gram
-    
+        score = training_responses.get(ngram, 0) + target_responses.get(ngram, 0)
+        attention_scores[i] = score
+
     return attention_scores
 
-def chat_with_neural_network(vocab, user_input, generate_length, n=3):
-    vocab_size = len(vocab)
-    output = []
+class SimpleDiscriminator:
+    def __init__(self, input_size, hidden_size):
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.weights1 = [[random.random() for _ in range(hidden_size)] for _ in range(input_size)]
+        self.weights2 = [random.random() for _ in range(hidden_size)]
+
+    def forward(self, x):
+        hidden = [self.relu(sum(x[j] * self.weights1[j][i] for j in range(self.input_size))) for i in range(self.hidden_size)]
+        output = self.sigmoid(sum(hidden[i] * self.weights2[i] for i in range(self.hidden_size)))
+        return output
+
+    def relu(self, x):
+        return max(0, x)
+
+    def sigmoid(self, x):
+        return 1 / (1 + math.exp(-x))
+
+def train_discriminator(discriminator, training_data, epochs):
+    for epoch in range(epochs):
+        for input_vector, label in training_data:
+            # Forward pass
+            output = discriminator.forward(input_vector)
+
+            # Simple weight update (not a true backpropagation)
+            error = label - output
+            for i in range(discriminator.input_size):
+                for j in range(discriminator.hidden_size):
+                    discriminator.weights1[i][j] += 0.01 * error * input_vector[i]  # Learning rate adjustment
+
+            for j in range(discriminator.hidden_size):
+                discriminator.weights2[j] += 0.01 * error * output  # Learning rate adjustment
+
+def build_vocabulary(text_data, n):
+    words = tokenize(text_data)
+    ngrams = [tuple(words[i:i+n]) for i in range(len(words) - n + 1)]
+    vocab = list(set(ngrams))
+    return vocab
+
+def vectorize_input(text):
+    # Placeholder function to convert text to vector
+    return [random.random() for _ in range(100)]  # Adjust size according to your model
+
+def chat_with_neural_network(vocab, user_input, generate_length, training_responses, target_responses, discriminator):
+    output_candidates = []
     current_input = user_input.split()
     
-    for i in range(generate_length):
-        # Compute input n-grams
+    for _ in range(generate_length):
         input_ngrams = [tuple(current_input[j:j+n]) for j in range(max(0, len(current_input) - n), len(current_input))]
         
-        # Compute attention vector based on input n-grams
-        attention_scores = compute_attention_vector(input_ngrams, vocab, n)
+        attention_scores = compute_attention_vector(input_ngrams, vocab, training_responses, target_responses)
         attention_vector = softmax(attention_scores, temperature)
         
-        # Sample from the distribution based on attention vector
-        predicted_idx = np.random.choice(range(len(attention_vector)), p=attention_vector)
+        predicted_idx = random.choices(range(len(attention_vector)), weights=attention_vector)[0]
         ngram_word = vocab[predicted_idx] if predicted_idx < len(vocab) else tuple([''])
         
-        # Add the n-gram to the output
         ngram_str = ' '.join(ngram_word)
-        output.append(ngram_str)
+        output_candidates.append(ngram_str)
         
-        # Update current input with the predicted n-gram
-        current_input = current_input + list(ngram_word)
-    
-    return ' '.join(output)
+        current_input += list(ngram_word)
 
+    # Score candidates with the discriminator
+    scores = []
+    for candidate in output_candidates:
+        input_vector = vectorize_input(candidate)  # Function to convert candidate to vector
+        score = discriminator.forward(input_vector)
+        scores.append((candidate, score))
+
+    # Choose the best candidate based on discriminator score
+    best_candidate = max(scores, key=lambda x: x[1])[0]
     
-def save_model(model_params, filepath):
-    with open(filepath, 'wb') as f:
-        pickle.dump(model_params, f)
-        
-def load_model(filepath):
-    with open(filepath, 'rb') as f:
-        return pickle.load(f)
-        
-# Preprocess text by removing stopwords
-def preprocess_text(text):
-    tokens = tokenize(text)
-    return tokens
-    
-def build_vocabulary(text_data, n):
-    
-    # Remove symbols and numbers using regex
-    #cleaned_text = re.sub(r'[^a-zA-Z\s]', '',  ' '.join(preprocess_text(text_data)))
-    
-    # Split text into words
-    words = ' '.join(preprocess_text(text_data)).split()
-    
-    # Filter out one-character words
-    words = [word for word in words if len(word) > 1 or word == "a" or word == "i"]
-    
-    # Generate n-grams
-    ngrams = [tuple(words[i:i+n]) for i in range(len(words)-n+1)]
-    
-    # Create a list of unique n-grams
-    vocab = list(set(ngrams))
-    
-    return vocab
-    
+    return best_candidate
+
 def main():
-    with open("test.txt", encoding="UTF-8") as f:
-        text_data = f.read()
-    vocab = build_vocabulary(text_data, n)[:KB_MEMORY_UNCOMPRESSED]
+    text_data = "This is a sample text. This text is for testing the n-gram model."
     
+    # Prepare training and target responses
+    training_responses = compute_ngram_frequencies(text_data, n)
+    target_responses = compute_ngram_frequencies(text_data, n)  # Could be different
+
+    vocab = build_vocabulary(text_data, n)
+    
+    # Initialize the discriminator
+    discriminator = SimpleDiscriminator(input_size=100, hidden_size=50)
+    
+    # Placeholder for training data
+    training_data = [(vectorize_input("example response"), 1.0)]  # Positive example
+    training_data += [(vectorize_input("bad response"), 0.0)]  # Negative example
+    
+    # Train the discriminator
+    train_discriminator(discriminator, training_data, epochs=10)
+
     while True:
         user_input = input("Enter text: ")
-        
-        # Generate n-grams sequentially
-        ngram_predictions = chat_with_neural_network(vocab, user_input, generate_length, n=n).lower()
-        print("Generated n-grams:", ngram_predictions)
+        ngram_predictions = chat_with_neural_network(vocab, user_input, generate_length, training_responses, target_responses, discriminator)
+        print("Generated response:", ngram_predictions)
         print()
+
 if __name__ == '__main__':
     main()
