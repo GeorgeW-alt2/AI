@@ -1,4 +1,4 @@
-#transformer v0.06
+#transformer v0.07
 import numpy as np
 import pickle
 import re
@@ -40,31 +40,43 @@ def compute_ngram_frequencies(text, n):
     
     return ngram_counts
 
+def compute_attention_vector(input_ngrams, vocab, n):
+    """Compute an attention vector for the input n-grams."""
+    attention_scores = np.zeros(len(vocab))
+    
+    for i, ngram in enumerate(vocab):
+        for j in range(len(input_ngrams)):
+            if input_ngrams[j] == ngram:
+                attention_scores[i] += 1  # Increment score for each matching n-gram
+    
+    return attention_scores
+
 def chat_with_neural_network(vocab, user_input, generate_length, n=3):
     vocab_size = len(vocab)
     output = []
-    current_input = user_input
+    current_input = user_input.split()
     
     for i in range(generate_length):
-        input_dict = compute_ngram_frequencies(current_input[:i], n)
-        input_vector = dict_to_vector(input_dict, vocab)  # Use vector instead of scalar
-        attention_vector = np.zeros_like(input_vector)
-        attention_vector += input_vector[i-2]
-        attention_vector += input_vector[i-1]
-        attention_vector += input_vector[i]
-        probabilities = softmax(attention_vector, temperature)
+        # Compute input n-grams
+        input_ngrams = [tuple(current_input[j:j+n]) for j in range(max(0, len(current_input) - n), len(current_input))]
         
-        # Sample from the distribution
-        predicted_idx = np.random.choice(range(len(probabilities)), p=probabilities)
+        # Compute attention vector based on input n-grams
+        attention_scores = compute_attention_vector(input_ngrams, vocab, n)
+        attention_vector = softmax(attention_scores, temperature)
+        
+        # Sample from the distribution based on attention vector
+        predicted_idx = np.random.choice(range(len(attention_vector)), p=attention_vector)
         ngram_word = vocab[predicted_idx] if predicted_idx < len(vocab) else tuple([''])
-
-        # Add the n-gram to the output and update syllable count
+        
+        # Add the n-gram to the output
         ngram_str = ' '.join(ngram_word)
         output.append(ngram_str)
         
-        current_input = ' '.join(ngram_word)
+        # Update current input with the predicted n-gram
+        current_input = current_input + list(ngram_word)
     
     return ' '.join(output)
+
     
 def save_model(model_params, filepath):
     with open(filepath, 'wb') as f:
