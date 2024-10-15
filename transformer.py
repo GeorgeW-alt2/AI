@@ -1,12 +1,10 @@
-#transformer v0.02
+#transformer v0.03
 import numpy as np
 import pickle
-import random
 import re
-import itertools
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 5000
+KB_MEMORY_UNCOMPRESSED = -1
 n = 3
 generate_length = 40  # Number of n-grams to generate sequentially
 temperature = 0.7  # Temperature for softmax
@@ -99,6 +97,7 @@ def build_vocabulary(text_data, n):
     vocab = list(set(ngrams))
     
     return vocab
+    
 def main():
     with open("test.txt", encoding="UTF-8") as f:
         text_data = f.read()
@@ -109,7 +108,7 @@ def main():
         
         # Generate n-grams sequentially
         ngram_predictions = chat_with_neural_network(vocab, user_input, generate_length, n=n).lower()
-        # Print the top 10 longest predictions
         print("Generated n-grams:", ngram_predictions)
+        
 if __name__ == '__main__':
     main()
