@@ -1,4 +1,4 @@
-#transformer v0.05
+#transformer v0.06
 import numpy as np
 import pickle
 import re
@@ -109,6 +109,6 @@ def main():
         # Generate n-grams sequentially
         ngram_predictions = chat_with_neural_network(vocab, user_input, generate_length, n=n).lower()
         print("Generated n-grams:", ngram_predictions)
-        
+        print()
 if __name__ == '__main__':
     main()
