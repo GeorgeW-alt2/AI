@@ -1,4 +1,4 @@
-#Transformer 0.17
+#Transformer 0.18
 import numpy as np
 import pickle
 import re
@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, DataLoader
 # Constants
 KB_MEMORY_UNCOMPRESSED = 17000
 n = 3
-num_epochs = 15
+num_epochs = 20
 generate_length = 140  # Number of tokens to generate sequentially
 temperature = 0.7  # Temperature for softmax
 
