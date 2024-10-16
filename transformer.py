@@ -1,4 +1,4 @@
-#Transformer 0.19
+#Transformer 0.20
 import numpy as np
 import pickle
 import re
@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 from datasets import load_dataset
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 12000
+KB_MEMORY_UNCOMPRESSED = 100000
 n = 3
 num_epochs = 20
 generate_length = 140  # Number of tokens to generate sequentially
