@@ -1,4 +1,4 @@
-#transformer v0.11
+#transformer v0.12
 import numpy as np
 import pickle
 import re
@@ -129,25 +129,28 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
     return ' '.join(generated_text)
 
 def main():
-    with open("test.txt", encoding="UTF-8") as f:
-        text_data = f.read()
-
-    word_to_index, vocab_size = build_vocabulary(text_data)
-    sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
-
-    # Create DataLoader
-    dataset = TextDataset(sequences)
-    data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
-
-    model = RNNModel(vocab_size)
-
     # User choice for saving or loading the model and vocab
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
 
     if choice == '1':
+        with open("test.txt", encoding="UTF-8") as f:
+            text_data = f.read()
+        word_to_index, vocab_size = build_vocabulary(text_data)
+        with open("vocab_size.dat", 'w') as file:
+            file.write(str(vocab_size))
+        
+        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
+
+        # Create DataLoader
+        dataset = TextDataset(sequences)
+        data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
+
+        model = RNNModel(vocab_size)
         train_model(model, data_loader)
         save_vocab_and_sequences(word_to_index, vocab_size, sequences)
     elif choice == '2':
+        with open("vocab_size.dat", encoding="UTF-8") as f:
+            vocab_size = int(f.read())
         model = load_model(vocab_size)
         word_to_index, vocab_size, sequences = load_vocab_and_sequences()
     else:
