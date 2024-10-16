@@ -1,4 +1,4 @@
-#transformer v0.10
+#transformer v0.11
 import numpy as np
 import pickle
 import re
@@ -74,9 +74,30 @@ def train_model(model, data_loader, num_epochs=50):
             loss.backward()
             optimizer.step()
         print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {loss.item():.4f}')
+    
+    # Save the model and vocabulary after training
+    torch.save(model.state_dict(), 'rnn_model.pth')
+    print("Model saved to rnn_model.pth")
+
+def load_model(vocab_size):
+    model = RNNModel(vocab_size)
+    # Load the model state dict with weights_only set to True
+    model.load_state_dict(torch.load('rnn_model.pth', weights_only=True))
+    model.eval()
+    return model
+
+def save_vocab_and_sequences(word_to_index, vocab_size, sequences):
+    with open('vocab.pkl', 'wb') as f:
+        pickle.dump((word_to_index, vocab_size, sequences), f)
+    print("Vocabulary and sequences saved to vocab.pkl")
+
+def load_vocab_and_sequences():
+    with open('vocab.pkl', 'rb') as f:
+        word_to_index, vocab_size, sequences = pickle.load(f)
+    print("Vocabulary and sequences loaded from vocab.pkl")
+    return word_to_index, vocab_size, sequences
 
 def generate_text(model, word_to_index, index_to_word, input_text, sequence_length, generate_length):
-    model.eval()
     input_sequence = preprocess_text(input_text)
     
     # Convert input words to indices, handling unknown words
@@ -118,9 +139,20 @@ def main():
     dataset = TextDataset(sequences)
     data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-    # Build and train the RNN model
     model = RNNModel(vocab_size)
-    train_model(model, data_loader)
+
+    # User choice for saving or loading the model and vocab
+    choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
+
+    if choice == '1':
+        train_model(model, data_loader)
+        save_vocab_and_sequences(word_to_index, vocab_size, sequences)
+    elif choice == '2':
+        model = load_model(vocab_size)
+        word_to_index, vocab_size, sequences = load_vocab_and_sequences()
+    else:
+        print("Invalid choice. Exiting.")
+        return
 
     index_to_word = {i: word for word, i in word_to_index.items()}
 
