@@ -1,4 +1,4 @@
-#Transformer 0.16
+#Transformer 0.17
 import numpy as np
 import pickle
 import re
@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 10000
+KB_MEMORY_UNCOMPRESSED = 17000
 n = 3
 num_epochs = 15
 generate_length = 140  # Number of tokens to generate sequentially
@@ -72,16 +72,32 @@ def train_model(model, data_loader, num_epochs=num_epochs):
     optimizer = optim.Adam(model.parameters())
 
     for epoch in range(num_epochs):
+        total_loss = 0
+        correct_predictions = 0
+        total_predictions = 0
+        
         for inputs, targets in data_loader:
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
-        print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {loss.item():.4f}')
+
+            total_loss += loss.item()
+            
+            # Calculate accuracy
+            _, predicted = torch.max(outputs, 1)
+            correct_predictions += (predicted == targets).sum().item()
+            total_predictions += targets.size(0)
+
+        epoch_loss = total_loss / len(data_loader)
+        accuracy = correct_predictions / total_predictions * 100
+        
+        print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {accuracy:.2f}%')
     
     torch.save(model.state_dict(), 'rnn_model.pth')
     print("Model saved to rnn_model.pth")
+
 
 def load_model(vocab_size):
     model = RNNModel(vocab_size)
