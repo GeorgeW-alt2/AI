@@ -1,7 +1,8 @@
-#transformer v0.12
+#Transformer 0.13
 import numpy as np
 import pickle
 import re
+import random  # Import random for shuffling
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,13 +11,16 @@ from torch.utils.data import Dataset, DataLoader
 # Constants
 KB_MEMORY_UNCOMPRESSED = 1000
 n = 3
+num_epochs = 15
 generate_length = 140  # Number of tokens to generate sequentially
 temperature = 0.7  # Temperature for softmax
 
 # Preprocessing and Tokenization
 def preprocess_text(text):
     cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
-    return cleaned_text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
+    tokens = cleaned_text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
+    # Filter out words of length 1
+    return [word for word in tokens if len(word) > 1]
 
 def build_vocabulary(text_data):
     tokens = preprocess_text(text_data)
@@ -62,7 +66,7 @@ class RNNModel(nn.Module):
         x = self.fc(x[:, -1, :])  # Use the output of the last time step
         return x
 
-def train_model(model, data_loader, num_epochs=50):
+def train_model(model, data_loader, num_epochs=num_epochs):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters())
 
@@ -75,13 +79,11 @@ def train_model(model, data_loader, num_epochs=50):
             optimizer.step()
         print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {loss.item():.4f}')
     
-    # Save the model and vocabulary after training
     torch.save(model.state_dict(), 'rnn_model.pth')
     print("Model saved to rnn_model.pth")
 
 def load_model(vocab_size):
     model = RNNModel(vocab_size)
-    # Load the model state dict with weights_only set to True
     model.load_state_dict(torch.load('rnn_model.pth', weights_only=True))
     model.eval()
     return model
@@ -100,17 +102,13 @@ def load_vocab_and_sequences():
 def generate_text(model, word_to_index, index_to_word, input_text, sequence_length, generate_length):
     input_sequence = preprocess_text(input_text)
     
-    # Convert input words to indices, handling unknown words
     input_indices = [word_to_index.get(word, -1) for word in input_sequence]
-    
-    # Remove -1 indices (unknown words)
     input_indices = [index for index in input_indices if index != -1]
     
     if len(input_indices) < sequence_length:
         print("Input is too short for generating text.")
         return ""
 
-    # Keep only the last `sequence_length` words
     input_tensor = torch.tensor(input_indices[-sequence_length:], dtype=torch.long).unsqueeze(0)
 
     generated_text = []
@@ -123,24 +121,24 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
 
             generated_text.append(predicted_word)
 
-            # Update the input sequence
             input_tensor = torch.cat((input_tensor[0][1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
 
     return ' '.join(generated_text)
 
 def main():
-    # User choice for saving or loading the model and vocab
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
 
     if choice == '1':
         with open("test.txt", encoding="UTF-8") as f:
-            text_data = f.read()
+            text_data = f.read().split(".")
+        random.shuffle(text_data)
+        text_data = '.'.join(text_data)
         word_to_index, vocab_size = build_vocabulary(text_data)
         with open("vocab_size.dat", 'w') as file:
             file.write(str(vocab_size))
         
         sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
-
+        
         # Create DataLoader
         dataset = TextDataset(sequences)
         data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
