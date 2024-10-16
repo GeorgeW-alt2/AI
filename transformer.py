@@ -1,15 +1,16 @@
-#Transformer 0.18
+#Transformer 0.19
 import numpy as np
 import pickle
 import re
-import random  # Import random for shuffling
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
+from datasets import load_dataset
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 17000
+KB_MEMORY_UNCOMPRESSED = 12000
 n = 3
 num_epochs = 20
 generate_length = 140  # Number of tokens to generate sequentially
@@ -18,10 +19,8 @@ temperature = 0.7  # Temperature for softmax
 # Preprocessing and Tokenization
 def preprocess_text(text):
     cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
-    tokens = text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
-    # Filter out words of length 1 except for "i" and "a"
+    tokens = cleaned_text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
     return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
-
 
 def build_vocabulary(text_data):
     tokens = preprocess_text(text_data)
@@ -34,11 +33,21 @@ def build_vocabulary(text_data):
     word_to_index = {word: i for i, word in enumerate(vocab)}
     return word_to_index, vocab_size
 
-def create_sequences(word_to_index, text, sequence_length):
+def create_sequences(word_to_index, instructions, responses, sequence_length):
     sequences = []
-    encoded = [word_to_index[word] for word in text]
-    for i in range(sequence_length, len(encoded)):
-        sequences.append((encoded[i-sequence_length:i], encoded[i]))
+    encoded_instructions = [word_to_index.get(word, -1) for word in instructions]
+    encoded_responses = [word_to_index.get(word, -1) for word in responses]
+
+    for i in range(sequence_length, len(encoded_responses)):
+        seq = encoded_instructions[i-sequence_length:i] + encoded_responses[i-sequence_length:i]
+        target = encoded_responses[i]
+        
+        # Check for unknown words (-1 indicates an unknown word)
+        if -1 in seq or target == -1:
+            continue
+        
+        sequences.append((seq, target))
+    
     return sequences
 
 # Dataset class
@@ -64,7 +73,7 @@ class RNNModel(nn.Module):
     def forward(self, x):
         x = self.embedding(x)
         x, _ = self.rnn(x)
-        x = self.fc(x[:, -1, :])  # Use the output of the last time step
+        x = self.fc(x[:, -1, :])
         return x
 
 def train_model(model, data_loader, num_epochs=num_epochs):
@@ -84,8 +93,6 @@ def train_model(model, data_loader, num_epochs=num_epochs):
             optimizer.step()
 
             total_loss += loss.item()
-            
-            # Calculate accuracy
             _, predicted = torch.max(outputs, 1)
             correct_predictions += (predicted == targets).sum().item()
             total_predictions += targets.size(0)
@@ -97,7 +104,6 @@ def train_model(model, data_loader, num_epochs=num_epochs):
     
     torch.save(model.state_dict(), 'rnn_model.pth')
     print("Model saved to rnn_model.pth")
-
 
 def load_model(vocab_size):
     model = RNNModel(vocab_size)
@@ -141,21 +147,31 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
             input_tensor = torch.cat((input_tensor[0][1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
 
     return ' '.join(generated_text)
-
 def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
 
     if choice == '1':
-        with open("test.txt", encoding="UTF-8") as f:
-            text_data = f.read().split(".")
-        random.shuffle(text_data)
-        text_data = '.'.join(text_data)
-        word_to_index, vocab_size = build_vocabulary(text_data)
+        # Load the dataset
+        data = load_dataset("VMware/open-instruct", split="train")
+
+        # Prepare instructions and responses
+        instructions = " ".join(data['instruction'])
+        responses = " ".join(data['response'])
+
+        # Combine and preprocess both instructions and responses
+        combined_text = instructions + " " + responses
+        word_to_index, vocab_size = build_vocabulary(combined_text)
+        
         with open("vocab_size.dat", 'w') as file:
             file.write(str(vocab_size))
-        
-        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
-        
+
+        # Preprocess both separately after vocabulary is built
+        processed_instructions = preprocess_text(instructions)
+        processed_responses = preprocess_text(responses)
+
+        # Create sequences using the updated function
+        sequences = create_sequences(word_to_index, processed_instructions, processed_responses, sequence_length=n)
+
         # Create DataLoader
         dataset = TextDataset(sequences)
         data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
@@ -179,6 +195,6 @@ def main():
         generated_text = generate_text(model, word_to_index, index_to_word, user_input, n, generate_length)
         print("Generated text:", generated_text)
         print()
-
+        
 if __name__ == '__main__':
     main()
