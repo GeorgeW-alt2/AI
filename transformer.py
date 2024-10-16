@@ -1,4 +1,4 @@
-#Transformer 0.13
+#Transformer 0.14
 import numpy as np
 import pickle
 import re
@@ -19,8 +19,9 @@ temperature = 0.7  # Temperature for softmax
 def preprocess_text(text):
     cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
     tokens = cleaned_text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
-    # Filter out words of length 1
-    return [word for word in tokens if len(word) > 1]
+    # Filter out words of length 1 except for "i" and "a"
+    return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
+
 
 def build_vocabulary(text_data):
     tokens = preprocess_text(text_data)
