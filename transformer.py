@@ -1,4 +1,4 @@
-#Transformer 0.14
+#Transformer 0.15
 import numpy as np
 import pickle
 import re
@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY_UNCOMPRESSED = 10000
 n = 3
 num_epochs = 15
 generate_length = 140  # Number of tokens to generate sequentially
@@ -106,7 +106,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
     input_indices = [word_to_index.get(word, -1) for word in input_sequence]
     input_indices = [index for index in input_indices if index != -1]
     
-    if len(input_indices) < sequence_length:
+    if len(input_indices) < 1:
         print("Input is too short for generating text.")
         return ""
 
