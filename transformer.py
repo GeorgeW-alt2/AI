@@ -1,4 +1,4 @@
-#Transformer 0.29
+#Transformer 0.30
 import numpy as np
 import pickle
 import re
@@ -169,9 +169,7 @@ def main():
     index_to_word = {i: word for word, i in word_to_index.items()}
 
     while True:
-        user_input = input("Enter text (or type 'exit' to quit): ")
-        if user_input.lower() == 'exit':
-            break
+        user_input = input("Enter text: ")
         generated_text = generate_text(model, word_to_index, index_to_word, user_input, n, generate_length)
         print("Generated text:", generated_text)
         print()
