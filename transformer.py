@@ -1,5 +1,5 @@
 
-#Transformer 0.18
+#Transformer 0.19
 import numpy as np
 import pickle
 import re
@@ -10,7 +10,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 17000
+KB_MEMORY_UNCOMPRESSED = 10000
 n = 3
 num_epochs = 20
 generate_length = 140  # Number of tokens to generate sequentially
@@ -133,6 +133,13 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
     for _ in range(generate_length):
         with torch.no_grad():
             output = model(input_tensor)
+
+            # Example usage of addcmul
+            tensor_a = torch.ones_like(output)  # Create a tensor of ones with the same shape
+            multiplier = torch.tensor(0.5)  # Convert the float to a tensor
+            output = output.addcmul(tensor_a, multiplier)  # Adjusting output based on tensor_a
+            
+            # Normalize output if needed before sampling
             output_dist = output.data.div(temperature).exp()
             predicted_index = torch.multinomial(output_dist, 1).item()
             predicted_word = index_to_word[predicted_index]
@@ -142,6 +149,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
             input_tensor = torch.cat((input_tensor[0][1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
 
     return ' '.join(generated_text)
+
 
 def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
