@@ -1,9 +1,8 @@
-
-#Transformer 0.19
+#Transformer 0.29
 import numpy as np
 import pickle
 import re
-import random  # Import random for shuffling
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -19,10 +18,8 @@ temperature = 0.7  # Temperature for softmax
 # Preprocessing and Tokenization
 def preprocess_text(text):
     cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
-    tokens = text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
-    # Filter out words of length 1 except for "i" and "a"
+    tokens = cleaned_text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
     return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
-
 
 def build_vocabulary(text_data):
     tokens = preprocess_text(text_data)
@@ -54,17 +51,17 @@ class TextDataset(Dataset):
         seq, target = self.sequences[idx]
         return torch.tensor(seq, dtype=torch.long), torch.tensor(target, dtype=torch.long)
 
-# RNN Model
-class RNNModel(nn.Module):
+# LSTM Model
+class LSTMModel(nn.Module):
     def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
-        super(RNNModel, self).__init__()
+        super(LSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.rnn = nn.RNN(embedding_dim, rnn_units, batch_first=True)
+        self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
         self.fc = nn.Linear(rnn_units, vocab_size)
 
     def forward(self, x):
         x = self.embedding(x)
-        x, _ = self.rnn(x)
+        x, _ = self.lstm(x)
         x = self.fc(x[:, -1, :])  # Use the output of the last time step
         return x
 
@@ -85,8 +82,6 @@ def train_model(model, data_loader, num_epochs=num_epochs):
             optimizer.step()
 
             total_loss += loss.item()
-            
-            # Calculate accuracy
             _, predicted = torch.max(outputs, 1)
             correct_predictions += (predicted == targets).sum().item()
             total_predictions += targets.size(0)
@@ -96,13 +91,12 @@ def train_model(model, data_loader, num_epochs=num_epochs):
         
         print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {accuracy:.2f}%')
     
-    torch.save(model.state_dict(), 'rnn_model.pth')
-    print("Model saved to rnn_model.pth")
-
+    torch.save(model.state_dict(), 'lstm_model.pth')
+    print("Model saved to lstm_model.pth")
 
 def load_model(vocab_size):
-    model = RNNModel(vocab_size)
-    model.load_state_dict(torch.load('rnn_model.pth', weights_only=True))
+    model = LSTMModel(vocab_size)
+    model.load_state_dict(torch.load('lstm_model.pth', weights_only=True))
     model.eval()
     return model
 
@@ -119,7 +113,6 @@ def load_vocab_and_sequences():
 
 def generate_text(model, word_to_index, index_to_word, input_text, sequence_length, generate_length):
     input_sequence = preprocess_text(input_text)
-    
     input_indices = [word_to_index.get(word, -1) for word in input_sequence]
     input_indices = [index for index in input_indices if index != -1]
     
@@ -134,12 +127,6 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
         with torch.no_grad():
             output = model(input_tensor)
 
-            # Example usage of addcmul
-            tensor_a = torch.ones_like(output)  # Create a tensor of ones with the same shape
-            multiplier = torch.tensor(0.5)  # Convert the float to a tensor
-            output = output.addcmul(tensor_a, multiplier)  # Adjusting output based on tensor_a
-            
-            # Normalize output if needed before sampling
             output_dist = output.data.div(temperature).exp()
             predicted_index = torch.multinomial(output_dist, 1).item()
             predicted_word = index_to_word[predicted_index]
@@ -150,26 +137,24 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
 
     return ' '.join(generated_text)
 
-
 def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
 
     if choice == '1':
         with open("test.txt", encoding="UTF-8") as f:
-            text_data = f.read().split(".")
-        random.shuffle(text_data)
-        text_data = '.'.join(text_data)
+            text_data = f.read()
+        random.shuffle(text_data.split("."))
+        text_data = '.'.join(text_data.split("."))
         word_to_index, vocab_size = build_vocabulary(text_data)
         with open("vocab_size.dat", 'w') as file:
             file.write(str(vocab_size))
         
         sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
         
-        # Create DataLoader
         dataset = TextDataset(sequences)
         data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-        model = RNNModel(vocab_size)
+        model = LSTMModel(vocab_size)
         train_model(model, data_loader)
         save_vocab_and_sequences(word_to_index, vocab_size, sequences)
     elif choice == '2':
@@ -184,7 +169,9 @@ def main():
     index_to_word = {i: word for word, i in word_to_index.items()}
 
     while True:
-        user_input = input("Enter text: ")
+        user_input = input("Enter text (or type 'exit' to quit): ")
+        if user_input.lower() == 'exit':
+            break
         generated_text = generate_text(model, word_to_index, index_to_word, user_input, n, generate_length)
         print("Generated text:", generated_text)
         print()
