@@ -1,4 +1,4 @@
-#Transformer 0.30
+#Transformer 0.31
 import numpy as np
 import pickle
 import re
@@ -51,19 +51,45 @@ class TextDataset(Dataset):
         seq, target = self.sequences[idx]
         return torch.tensor(seq, dtype=torch.long), torch.tensor(target, dtype=torch.long)
 
-# LSTM Model
+class Attention(nn.Module):
+    def __init__(self, rnn_units):
+        super(Attention, self).__init__()
+        self.Wa = nn.Linear(rnn_units, rnn_units)
+        self.Ua = nn.Linear(rnn_units, rnn_units)
+        self.Va = nn.Linear(rnn_units, 1)
+
+    def forward(self, hidden_state, encoder_outputs):
+        # Expand hidden_state to match encoder_outputs
+        hidden_state_expanded = hidden_state.unsqueeze(1)  # Shape: [batch_size, 1, rnn_units]
+        hidden_state_transformed = self.Wa(hidden_state_expanded)  # Shape: [batch_size, 1, rnn_units]
+        
+        # Apply transformation to encoder outputs
+        encoder_outputs_transformed = self.Ua(encoder_outputs)  # Shape: [batch_size, sequence_length, rnn_units]
+
+        # Compute scores
+        scores = self.Va(torch.tanh(hidden_state_transformed + encoder_outputs_transformed))  # Shape: [batch_size, sequence_length, 1]
+        
+        # Get attention weights
+        attention_weights = torch.softmax(scores, dim=1)  # Shape: [batch_size, sequence_length, 1]
+        
+        # Compute context vector
+        context_vector = attention_weights * encoder_outputs  # Shape: [batch_size, sequence_length, rnn_units]
+        return context_vector.sum(dim=1), attention_weights
+        
 class LSTMModel(nn.Module):
     def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
         super(LSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
+        self.attention = Attention(rnn_units)
         self.fc = nn.Linear(rnn_units, vocab_size)
 
     def forward(self, x):
         x = self.embedding(x)
-        x, _ = self.lstm(x)
-        x = self.fc(x[:, -1, :])  # Use the output of the last time step
-        return x
+        lstm_out, (hidden_state, _) = self.lstm(x)  # LSTM output and hidden state
+        context_vector, _ = self.attention(hidden_state.squeeze(0), lstm_out)  # Squeeze hidden state to get correct shape
+        output = self.fc(context_vector)  # Final output
+        return output  # Return only the logits
 
 def train_model(model, data_loader, num_epochs=num_epochs):
     criterion = nn.CrossEntropyLoss()
@@ -125,7 +151,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
     generated_text = []
     for _ in range(generate_length):
         with torch.no_grad():
-            output = model(input_tensor)
+            output = model(input_tensor)  # This now only returns logits
 
             output_dist = output.data.div(temperature).exp()
             predicted_index = torch.multinomial(output_dist, 1).item()
@@ -136,6 +162,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
             input_tensor = torch.cat((input_tensor[0][1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
 
     return ' '.join(generated_text)
+
 
 def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
