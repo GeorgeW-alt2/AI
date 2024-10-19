@@ -1,4 +1,4 @@
-#Transformer 0.31
+#Transformer 0.32
 import numpy as np
 import pickle
 import re
@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, DataLoader
 # Constants
 KB_MEMORY_UNCOMPRESSED = 10000
 n = 3
-num_epochs = 20
+num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
 temperature = 0.7  # Temperature for softmax
 
@@ -61,10 +61,10 @@ class Attention(nn.Module):
     def forward(self, hidden_state, encoder_outputs):
         # Expand hidden_state to match encoder_outputs
         hidden_state_expanded = hidden_state.unsqueeze(1)  # Shape: [batch_size, 1, rnn_units]
-        hidden_state_transformed = self.Wa(hidden_state_expanded)  # Shape: [batch_size, 1, rnn_units]
+        hidden_state_transformed = self.Ua(hidden_state_expanded)  # Shape: [batch_size, 1, rnn_units]
         
         # Apply transformation to encoder outputs
-        encoder_outputs_transformed = self.Ua(encoder_outputs)  # Shape: [batch_size, sequence_length, rnn_units]
+        encoder_outputs_transformed = self.Wa(encoder_outputs)  # Shape: [batch_size, sequence_length, rnn_units]
 
         # Compute scores
         scores = self.Va(torch.tanh(hidden_state_transformed + encoder_outputs_transformed))  # Shape: [batch_size, sequence_length, 1]
