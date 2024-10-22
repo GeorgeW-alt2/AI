@@ -1,4 +1,4 @@
-#Transformer 0.33
+#Transformer 0.34
 import numpy as np
 import pickle
 import re
@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
+import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 
 # Constants
 KB_MEMORY_UNCOMPRESSED = 10000
@@ -51,6 +52,7 @@ class TextDataset(Dataset):
         seq, target = self.sequences[idx]
         return torch.tensor(seq, dtype=torch.long), torch.tensor(target, dtype=torch.long)
 
+# Attention mechanism (unchanged)
 class Attention(nn.Module):
     def __init__(self, rnn_units):
         super(Attention, self).__init__()
@@ -59,36 +61,29 @@ class Attention(nn.Module):
         self.Va = nn.Linear(rnn_units, 1)
 
     def forward(self, hidden_state, encoder_outputs):
-        # Expand hidden_state to match encoder_outputs
         hidden_state_expanded = hidden_state.unsqueeze(1)  # Shape: [batch_size, 1, rnn_units]
         hidden_state_transformed = self.Ua(hidden_state_expanded)  # Shape: [batch_size, 1, rnn_units]
-        
-        # Apply transformation to encoder outputs
         encoder_outputs_transformed = self.Wa(encoder_outputs)  # Shape: [batch_size, sequence_length, rnn_units]
 
-        # Compute scores
         scores = self.Va(torch.tanh(hidden_state_transformed + encoder_outputs_transformed))  # Shape: [batch_size, sequence_length, 1]
-        
-        # Get attention weights
         attention_weights = torch.softmax(scores, dim=1)  # Shape: [batch_size, sequence_length, 1]
-        
-        # Compute context vector
         context_vector = attention_weights * encoder_outputs  # Shape: [batch_size, sequence_length, rnn_units]
         return context_vector.sum(dim=1), attention_weights
-        
-class LSTMModel(nn.Module):
+
+# LSTM Model with Bayesian Linear Layers
+class BayesianLSTMModel(nn.Module):
     def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
-        super(LSTMModel, self).__init__()
+        super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
         self.attention = Attention(rnn_units)
-        self.fc = nn.Linear(rnn_units, vocab_size)
+        self.bayesian_fc = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=rnn_units, out_features=vocab_size)
 
     def forward(self, x):
         x = self.embedding(x)
         lstm_out, (hidden_state, _) = self.lstm(x)  # LSTM output and hidden state
         context_vector, _ = self.attention(hidden_state.squeeze(0), lstm_out)  # Squeeze hidden state to get correct shape
-        output = self.fc(context_vector)  # Final output
+        output = self.bayesian_fc(context_vector)  # Final Bayesian output with uncertainty
         return output  # Return only the logits
 
 def train_model(model, data_loader, num_epochs=num_epochs):
@@ -117,12 +112,12 @@ def train_model(model, data_loader, num_epochs=num_epochs):
         
         print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {accuracy:.2f}%')
     
-    torch.save(model.state_dict(), 'lstm_model.pth')
-    print("Model saved to lstm_model.pth")
+    torch.save(model.state_dict(), 'bayesian_lstm_model.pth')
+    print("Model saved to bayesian_lstm_model.pth")
 
 def load_model(vocab_size):
-    model = LSTMModel(vocab_size)
-    model.load_state_dict(torch.load('lstm_model.pth', weights_only=True))
+    model = BayesianLSTMModel(vocab_size)
+    model.load_state_dict(torch.load('bayesian_lstm_model.pth', weights_only=True))
     model.eval()
     return model
 
@@ -181,7 +176,7 @@ def main():
         dataset = TextDataset(sequences)
         data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-        model = LSTMModel(vocab_size)
+        model = BayesianLSTMModel(vocab_size)
         train_model(model, data_loader)
         save_vocab_and_sequences(word_to_index, vocab_size, sequences)
     elif choice == '2':
