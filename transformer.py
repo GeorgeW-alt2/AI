@@ -1,4 +1,4 @@
-#Transformer 0.34
+#Transformer 0.40
 import numpy as np
 import pickle
 import re
@@ -12,7 +12,7 @@ import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 # Constants
 KB_MEMORY_UNCOMPRESSED = 10000
 n = 3
-num_epochs = 30
+num_epochs = 45
 generate_length = 140  # Number of tokens to generate sequentially
 temperature = 0.7  # Temperature for softmax
 
@@ -66,13 +66,13 @@ class Attention(nn.Module):
         encoder_outputs_transformed = self.Wa(encoder_outputs)  # Shape: [batch_size, sequence_length, rnn_units]
 
         scores = self.Va(torch.tanh(hidden_state_transformed + encoder_outputs_transformed))  # Shape: [batch_size, sequence_length, 1]
-        attention_weights = torch.softmax(scores, dim=1)  # Shape: [batch_size, sequence_length, 1]
+        attention_weights = torch.argmax(scores)  # Shape: [batch_size, sequence_length, 1]
         context_vector = attention_weights * encoder_outputs  # Shape: [batch_size, sequence_length, rnn_units]
         return context_vector.sum(dim=1), attention_weights
 
 # LSTM Model with Bayesian Linear Layers
 class BayesianLSTMModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
+    def __init__(self, vocab_size, embedding_dim=150, rnn_units=256):
         super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
@@ -163,7 +163,7 @@ def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
 
     if choice == '1':
-        with open("test.txt", encoding="UTF-8") as f:
+        with open("xaa", encoding="UTF-8") as f:
             text_data = f.read()
         random.shuffle(text_data.split("."))
         text_data = '.'.join(text_data.split("."))
