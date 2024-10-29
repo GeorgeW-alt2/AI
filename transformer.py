@@ -1,4 +1,4 @@
-#Transformer 0.40
+#Transformer 0.34
 import numpy as np
 import pickle
 import re
@@ -10,9 +10,9 @@ from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 10000
+KB_MEMORY_UNCOMPRESSED = 1000
 n = 3
-num_epochs = 45
+num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
 temperature = 0.7  # Temperature for softmax
 
@@ -66,13 +66,13 @@ class Attention(nn.Module):
         encoder_outputs_transformed = self.Wa(encoder_outputs)  # Shape: [batch_size, sequence_length, rnn_units]
 
         scores = self.Va(torch.tanh(hidden_state_transformed + encoder_outputs_transformed))  # Shape: [batch_size, sequence_length, 1]
-        attention_weights = torch.argmax(scores)  # Shape: [batch_size, sequence_length, 1]
+        attention_weights = torch.softmax(scores, dim=1)  # Shape: [batch_size, sequence_length, 1]
         context_vector = attention_weights * encoder_outputs  # Shape: [batch_size, sequence_length, rnn_units]
         return context_vector.sum(dim=1), attention_weights
 
 # LSTM Model with Bayesian Linear Layers
 class BayesianLSTMModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=150, rnn_units=256):
+    def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
         super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
