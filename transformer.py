@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 500000
+KB_MEMORY_UNCOMPRESSED = 5000
 n = 3
 num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
