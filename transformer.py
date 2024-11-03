@@ -72,7 +72,7 @@ class Attention(nn.Module):
 
 # LSTM Model with Bayesian Linear Layers
 class BayesianLSTMModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
+    def __init__(self, vocab_size, embedding_dim=300, rnn_units=1024):
         super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
@@ -86,9 +86,9 @@ class BayesianLSTMModel(nn.Module):
         output = self.bayesian_fc(context_vector)  # Final Bayesian output with uncertainty
         return output  # Return only the logits
 
-def train_model(model, data_loader, num_epochs=num_epochs):
+def train_model(model, data_loader, num_epochs=num_epochs, learning_rate=0.009467246079480102):
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters())
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)  # Custom learning rate
 
     for epoch in range(num_epochs):
         total_loss = 0
@@ -114,6 +114,7 @@ def train_model(model, data_loader, num_epochs=num_epochs):
     
     torch.save(model.state_dict(), 'bayesian_lstm_model.pth')
     print("Model saved to bayesian_lstm_model.pth")
+
 
 def load_model(vocab_size):
     model = BayesianLSTMModel(vocab_size)
