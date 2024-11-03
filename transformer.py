@@ -1,4 +1,4 @@
-#Transformer 0.34
+#Transformer 0.60
 import numpy as np
 import pickle
 import re
@@ -70,22 +70,34 @@ class Attention(nn.Module):
         context_vector = attention_weights * encoder_outputs  # Shape: [batch_size, sequence_length, rnn_units]
         return context_vector.sum(dim=1), attention_weights
 
-# LSTM Model with Bayesian Linear Layers
+# Automorphism layer for embedding transformations
+class AutomorphismLayer(nn.Module):
+    def __init__(self, embedding_dim):
+        super(AutomorphismLayer, self).__init__()
+        self.transform = nn.Linear(embedding_dim, embedding_dim, bias=False)
+
+    def forward(self, x):
+        return self.transform(x) + x  # Adds transformed and original embeddings
+
+# LSTM Model with Bayesian Linear Layers and Automorphism Layer
 class BayesianLSTMModel(nn.Module):
     def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
         super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.automorphism_layer = AutomorphismLayer(embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
         self.attention = Attention(rnn_units)
         self.bayesian_fc = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=rnn_units, out_features=vocab_size)
 
     def forward(self, x):
         x = self.embedding(x)
+        x = self.automorphism_layer(x)  # Apply automorphism transformation
         lstm_out, (hidden_state, _) = self.lstm(x)  # LSTM output and hidden state
         context_vector, _ = self.attention(hidden_state.squeeze(0), lstm_out)  # Squeeze hidden state to get correct shape
         output = self.bayesian_fc(context_vector)  # Final Bayesian output with uncertainty
         return output  # Return only the logits
 
+# Training function
 def train_model(model, data_loader, num_epochs=num_epochs):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters())
