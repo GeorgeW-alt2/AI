@@ -1,4 +1,4 @@
-#Transformer 0.60
+#Transformer 0.61
 import numpy as np
 import pickle
 import re
@@ -203,7 +203,8 @@ def main():
     index_to_word = {i: word for word, i in word_to_index.items()}
 
     while True:
-        user_input = input("Enter text: ")
+        user_input = input("Enter text: ").lower()
+        user_input = re.sub(r'[^a-zA-Z\s]', '', user_input)
         generated_text = generate_text(model, word_to_index, index_to_word, user_input, n, generate_length)
         print("Generated text:", generated_text)
         print()
