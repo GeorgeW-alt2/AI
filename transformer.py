@@ -1,4 +1,3 @@
-#Transformer 0.61
 import numpy as np
 import pickle
 import re
@@ -8,9 +7,18 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
+from multiprocessing import cpu_count
+
+# Setting the device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Configure PyTorch to use multiple cores
+num_cores = cpu_count()
+torch.set_num_threads(num_cores)  # Set the number of intra-op parallel threads
+torch.set_num_interop_threads(num_cores)  # Set the number of inter-op parallel threads
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 50000
+KB_MEMORY_UNCOMPRESSED = 1000
 n = 3
 num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
@@ -108,6 +116,7 @@ def train_model(model, data_loader, num_epochs=num_epochs):
         total_predictions = 0
         
         for inputs, targets in data_loader:
+            inputs, targets = inputs.to(device), targets.to(device)  # Move to device
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, targets)
@@ -128,8 +137,8 @@ def train_model(model, data_loader, num_epochs=num_epochs):
     print("Model saved to bayesian_lstm_model.pth")
 
 def load_model(vocab_size):
-    model = BayesianLSTMModel(vocab_size)
-    model.load_state_dict(torch.load('bayesian_lstm_model.pth', weights_only=True))
+    model = BayesianLSTMModel(vocab_size).to(device)
+    model.load_state_dict(torch.load('bayesian_lstm_model.pth', map_location=device))
     model.eval()
     return model
 
@@ -143,33 +152,6 @@ def load_vocab_and_sequences():
         word_to_index, vocab_size, sequences = pickle.load(f)
     print("Vocabulary and sequences loaded from vocab.pkl")
     return word_to_index, vocab_size, sequences
-
-def generate_text(model, word_to_index, index_to_word, input_text, sequence_length, generate_length):
-    input_sequence = preprocess_text(input_text)
-    input_indices = [word_to_index.get(word, -1) for word in input_sequence]
-    input_indices = [index for index in input_indices if index != -1]
-    
-    if len(input_indices) < 1:
-        print("Input is too short for generating text.")
-        return ""
-
-    input_tensor = torch.tensor(input_indices[-sequence_length:], dtype=torch.long).unsqueeze(0)
-
-    generated_text = []
-    for _ in range(generate_length):
-        with torch.no_grad():
-            output = model(input_tensor)  # This now only returns logits
-
-            output_dist = output.data.div(temperature).exp()
-            predicted_index = torch.multinomial(output_dist, 1).item()
-            predicted_word = index_to_word[predicted_index]
-
-            generated_text.append(predicted_word)
-
-            input_tensor = torch.cat((input_tensor[0][1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
-
-    return ' '.join(generated_text)
-
 
 def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
@@ -186,9 +168,9 @@ def main():
         sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
         
         dataset = TextDataset(sequences)
-        data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
+        data_loader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=num_cores)
 
-        model = BayesianLSTMModel(vocab_size)
+        model = BayesianLSTMModel(vocab_size).to(device)
         train_model(model, data_loader)
         save_vocab_and_sequences(word_to_index, vocab_size, sequences)
     elif choice == '2':
@@ -202,12 +184,5 @@ def main():
 
     index_to_word = {i: word for word, i in word_to_index.items()}
 
-    while True:
-        user_input = input("Enter text: ").lower()
-        user_input = re.sub(r'[^a-zA-Z\s]', '', user_input)
-        generated_text = generate_text(model, word_to_index, index_to_word, user_input, n, generate_length)
-        print("Generated text:", generated_text)
-        print()
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
