@@ -23,7 +23,7 @@ KB_MEMORY_UNCOMPRESSED = 1000
 n = 3
 num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
-temperature = 0.3  # Temperature for softmax
+temperature = 0.7  # Temperature for softmax
 
 # Preprocessing and Tokenization
 def preprocess_text(text):
