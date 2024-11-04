@@ -90,7 +90,7 @@ class AutomorphismLayer(nn.Module):
 
 # LSTM Model with Bayesian Linear Layers and Automorphism Layer
 class BayesianLSTMModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
+    def __init__(self, vocab_size, embedding_dim=5000, rnn_units=12800):
         super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.automorphism_layer = AutomorphismLayer(embedding_dim)
