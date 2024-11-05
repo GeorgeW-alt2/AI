@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 8000
+KB_MEMORY_UNCOMPRESSED = 1000
 n = 3
 num_epochs = 15
 generate_length = 140  # Number of tokens to generate sequentially
@@ -19,7 +19,7 @@ temperature = 0.7  # Temperature for softmax
 # Preprocessing and Tokenization
 def preprocess_text(text):
     cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
-    tokens = cleaned_text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
+    tokens = cleaned_text.lower().split()
     return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
 
 def build_vocabulary(text_data):
@@ -180,9 +180,7 @@ def main():
 
     if choice == '1':
         with open("xaa", encoding="UTF-8") as f:
-            text_data = f.read()
-        random.shuffle(text_data.split("."))
-        text_data = '.'.join(text_data.split("."))
+            text_data = '.'.join(f.read().split(".")[:KB_MEMORY_UNCOMPRESSED])
         word_to_index, vocab_size = build_vocabulary(text_data)
         with open("vocab_size.dat", 'w') as file:
             file.write(str(vocab_size))
