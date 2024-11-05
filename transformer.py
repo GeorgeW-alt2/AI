@@ -1,4 +1,4 @@
-#Transformer 0.61
+#Transformer 0.70
 import numpy as np
 import pickle
 import re
@@ -10,9 +10,9 @@ from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY_UNCOMPRESSED = 8000
 n = 3
-num_epochs = 30
+num_epochs = 15
 generate_length = 140  # Number of tokens to generate sequentially
 temperature = 0.7  # Temperature for softmax
 
@@ -77,7 +77,7 @@ class AutomorphismLayer(nn.Module):
         super(AutomorphismLayer, self).__init__()
         # Initialize with an orthogonal matrix to ensure invertibility
         self.transform = nn.Linear(embedding_dim, embedding_dim, bias=False)
-        nn.init.orthogonal_(self.transform.weight)  # Enforces an orthogonal matrix, ensuring isomorphism
+        nn.init.kaiming_uniform_(self.transform.weight)  
 
     def forward(self, x):
         # Apply isomorphic transformation: orthogonal matrix keeps embeddings in isomorphic form
@@ -85,7 +85,7 @@ class AutomorphismLayer(nn.Module):
 
 # LSTM Model with Bayesian Linear Layers and Automorphism Layer
 class BayesianLSTMModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
+    def __init__(self, vocab_size, embedding_dim=250, rnn_units=512):
         super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.automorphism_layer = AutomorphismLayer(embedding_dim)
