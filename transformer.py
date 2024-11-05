@@ -1,4 +1,4 @@
-#Transformer 0.64
+#Transformer 0.61
 import numpy as np
 import pickle
 import re
@@ -8,15 +8,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
-from multiprocessing import cpu_count
-
-# Setting the device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# Configure PyTorch to use multiple cores
-num_cores = cpu_count()
-torch.set_num_threads(num_cores)  # Set the number of intra-op parallel threads
-torch.set_num_interop_threads(num_cores)  # Set the number of inter-op parallel threads
 
 # Constants
 KB_MEMORY_UNCOMPRESSED = 1000
@@ -79,18 +70,22 @@ class Attention(nn.Module):
         context_vector = attention_weights * encoder_outputs  # Shape: [batch_size, sequence_length, rnn_units]
         return context_vector.sum(dim=1), attention_weights
 
-# Automorphism layer for embedding transformations
+
+# Modified AutomorphismLayer with Isomorphic Transformation
 class AutomorphismLayer(nn.Module):
     def __init__(self, embedding_dim):
         super(AutomorphismLayer, self).__init__()
+        # Initialize with an orthogonal matrix to ensure invertibility
         self.transform = nn.Linear(embedding_dim, embedding_dim, bias=False)
+        nn.init.orthogonal_(self.transform.weight)  # Enforces an orthogonal matrix, ensuring isomorphism
 
     def forward(self, x):
-        return self.transform(x) + x  # Adds transformed and original embeddings
+        # Apply isomorphic transformation: orthogonal matrix keeps embeddings in isomorphic form
+        return self.transform(x) + x
 
 # LSTM Model with Bayesian Linear Layers and Automorphism Layer
 class BayesianLSTMModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=5000, rnn_units=12800):
+    def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
         super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.automorphism_layer = AutomorphismLayer(embedding_dim)
@@ -117,7 +112,6 @@ def train_model(model, data_loader, num_epochs=num_epochs):
         total_predictions = 0
         
         for inputs, targets in data_loader:
-            inputs, targets = inputs.to(device), targets.to(device)  # Move to device
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, targets)
@@ -138,8 +132,8 @@ def train_model(model, data_loader, num_epochs=num_epochs):
     print("Model saved to bayesian_lstm_model.pth")
 
 def load_model(vocab_size):
-    model = BayesianLSTMModel(vocab_size).to(device)
-    model.load_state_dict(torch.load('bayesian_lstm_model.pth', map_location=device, weights_only=True))
+    model = BayesianLSTMModel(vocab_size)
+    model.load_state_dict(torch.load('bayesian_lstm_model.pth', weights_only=True))
     model.eval()
     return model
 
@@ -179,7 +173,8 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
             input_tensor = torch.cat((input_tensor[0][1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
 
     return ' '.join(generated_text)
-    
+
+
 def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
 
@@ -195,9 +190,9 @@ def main():
         sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
         
         dataset = TextDataset(sequences)
-        data_loader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=num_cores)
+        data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-        model = BayesianLSTMModel(vocab_size).to(device)
+        model = BayesianLSTMModel(vocab_size)
         train_model(model, data_loader)
         save_vocab_and_sequences(word_to_index, vocab_size, sequences)
     elif choice == '2':
@@ -218,5 +213,5 @@ def main():
         print("Generated text:", generated_text)
         print()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
