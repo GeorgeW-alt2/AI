@@ -1,4 +1,4 @@
-#Transformer 0.72
+#Transformer 0.73
 import numpy as np
 import pickle
 import re
@@ -8,11 +8,12 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
+import time  # Import the time module
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY = 1000
 n = 3
-num_epochs = 15
+num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
 
 # Preprocessing and Tokenization
@@ -148,12 +149,13 @@ def generate_text_with_bandit(model, word_to_index, index_to_word, input_text, s
 
     return ' '.join(generated_text)
 
-# Training function
+# Training function with ETA
 def train_model(model, data_loader, num_epochs=num_epochs):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters())
 
     for epoch in range(num_epochs):
+        start_time = time.time()  # Start timer for the epoch
         total_loss = 0
         correct_predictions = 0
         total_predictions = 0
@@ -173,10 +175,19 @@ def train_model(model, data_loader, num_epochs=num_epochs):
         epoch_loss = total_loss / len(data_loader)
         accuracy = correct_predictions / total_predictions * 100
         
-        print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {accuracy:.2f}%')
-    
+        # Calculate elapsed time for the epoch and estimate remaining time
+        elapsed_time = time.time() - start_time
+        remaining_time = elapsed_time * (num_epochs - epoch - 1)
+        
+        # Format remaining time as minutes and seconds
+        eta_minutes = int(remaining_time // 60)
+        eta_seconds = int(remaining_time % 60)
+        
+        print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {accuracy:.2f}%, ETA: {eta_minutes}m {eta_seconds}s remaining')
+
     torch.save(model.state_dict(), 'bayesian_lstm_model.pth')
     print("Model saved to bayesian_lstm_model.pth")
+
 
 def load_model(vocab_size):
     model = BayesianLSTMModel(vocab_size)
@@ -200,7 +211,7 @@ def main():
 
     if choice == '1':
         with open("xaa", encoding="UTF-8") as f:
-            text_data = '.'.join(f.read().split(".")[:KB_MEMORY_UNCOMPRESSED])
+            text_data = '.'.join(f.read().split(".")[:KB_MEMORY])
         word_to_index, vocab_size = build_vocabulary(text_data)
         
         sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
