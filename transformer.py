@@ -1,4 +1,4 @@
-#Transformer 0.70
+#Transformer 0.72
 import numpy as np
 import pickle
 import re
@@ -14,7 +14,6 @@ KB_MEMORY_UNCOMPRESSED = 1000
 n = 3
 num_epochs = 15
 generate_length = 140  # Number of tokens to generate sequentially
-temperature = 0.7  # Temperature for softmax
 
 # Preprocessing and Tokenization
 def preprocess_text(text):
@@ -75,17 +74,15 @@ class Attention(nn.Module):
 class AutomorphismLayer(nn.Module):
     def __init__(self, embedding_dim):
         super(AutomorphismLayer, self).__init__()
-        # Initialize with an orthogonal matrix to ensure invertibility
         self.transform = nn.Linear(embedding_dim, embedding_dim, bias=False)
         nn.init.kaiming_uniform_(self.transform.weight)  
 
     def forward(self, x):
-        # Apply isomorphic transformation: orthogonal matrix keeps embeddings in isomorphic form
         return self.transform(x) + x
 
 # LSTM Model with Bayesian Linear Layers and Automorphism Layer
 class BayesianLSTMModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=250, rnn_units=512):
+    def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
         super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.automorphism_layer = AutomorphismLayer(embedding_dim)
@@ -97,9 +94,59 @@ class BayesianLSTMModel(nn.Module):
         x = self.embedding(x)
         x = self.automorphism_layer(x)  # Apply automorphism transformation
         lstm_out, (hidden_state, _) = self.lstm(x)  # LSTM output and hidden state
-        context_vector, _ = self.attention(hidden_state.squeeze(0), lstm_out)  # Squeeze hidden state to get correct shape
+        context_vector, _ = self.attention(hidden_state.squeeze(0), lstm_out)
         output = self.bayesian_fc(context_vector)  # Final Bayesian output with uncertainty
         return output  # Return only the logits
+
+# Multi-Armed Bandit for temperature selection
+class MultiArmedBandit:
+    def __init__(self, temperatures, epsilon=0.1):
+        self.temperatures = temperatures
+        self.epsilon = epsilon
+        self.counts = np.zeros(len(temperatures))  # Times each temperature was chosen
+        self.values = np.zeros(len(temperatures))  # Estimated reward for each temperature
+
+    def select_arm(self):
+        if random.random() > self.epsilon:
+            return np.argmax(self.values)  # Choose best-known temperature
+        else:
+            return random.randrange(len(self.temperatures))  # Choose random temperature
+
+    def update(self, chosen_arm, reward):
+        self.counts[chosen_arm] += 1
+        n = self.counts[chosen_arm]
+        value = self.values[chosen_arm]
+        self.values[chosen_arm] = ((n - 1) / n) * value + (1 / n) * reward
+
+# Text generation with Multi-Armed Bandit
+def generate_text_with_bandit(model, word_to_index, index_to_word, input_text, sequence_length, generate_length, bandit):
+    input_sequence = preprocess_text(input_text)
+    input_indices = [word_to_index.get(word, -1) for word in input_sequence]
+    input_indices = [index for index in input_indices if index != -1]
+    
+    if len(input_indices) < 1:
+        print("Input is too short for generating text.")
+        return ""
+
+    input_tensor = torch.tensor(input_indices[-sequence_length:], dtype=torch.long).unsqueeze(0)
+    generated_text = []
+
+    for _ in range(generate_length):
+        chosen_arm = bandit.select_arm()
+        temperature = bandit.temperatures[chosen_arm]
+
+        with torch.no_grad():
+            output = model(input_tensor)  # This now only returns logits
+            output_dist = output.div(temperature).exp()
+            predicted_index = torch.multinomial(output_dist, 1).item()
+            predicted_word = index_to_word[predicted_index]
+            generated_text.append(predicted_word)
+            input_tensor = torch.cat((input_tensor[0][1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
+
+        reward = len(predicted_word) / 5.0  # Example reward (length-based, adjust as needed)
+        bandit.update(chosen_arm, reward)
+
+    return ' '.join(generated_text)
 
 # Training function
 def train_model(model, data_loader, num_epochs=num_epochs):
@@ -147,34 +194,7 @@ def load_vocab_and_sequences():
         word_to_index, vocab_size, sequences = pickle.load(f)
     print("Vocabulary and sequences loaded from vocab.pkl")
     return word_to_index, vocab_size, sequences
-
-def generate_text(model, word_to_index, index_to_word, input_text, sequence_length, generate_length):
-    input_sequence = preprocess_text(input_text)
-    input_indices = [word_to_index.get(word, -1) for word in input_sequence]
-    input_indices = [index for index in input_indices if index != -1]
-    
-    if len(input_indices) < 1:
-        print("Input is too short for generating text.")
-        return ""
-
-    input_tensor = torch.tensor(input_indices[-sequence_length:], dtype=torch.long).unsqueeze(0)
-
-    generated_text = []
-    for _ in range(generate_length):
-        with torch.no_grad():
-            output = model(input_tensor)  # This now only returns logits
-
-            output_dist = output.data.div(temperature).exp()
-            predicted_index = torch.multinomial(output_dist, 1).item()
-            predicted_word = index_to_word[predicted_index]
-
-            generated_text.append(predicted_word)
-
-            input_tensor = torch.cat((input_tensor[0][1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
-
-    return ' '.join(generated_text)
-
-
+# Main function
 def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
 
@@ -182,17 +202,13 @@ def main():
         with open("xaa", encoding="UTF-8") as f:
             text_data = '.'.join(f.read().split(".")[:KB_MEMORY_UNCOMPRESSED])
         word_to_index, vocab_size = build_vocabulary(text_data)
-        with open("vocab_size.dat", 'w') as file:
-            file.write(str(vocab_size))
         
         sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
-        
         dataset = TextDataset(sequences)
         data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
         model = BayesianLSTMModel(vocab_size)
         train_model(model, data_loader)
-        save_vocab_and_sequences(word_to_index, vocab_size, sequences)
     elif choice == '2':
         with open("vocab_size.dat", encoding="UTF-8") as f:
             vocab_size = int(f.read())
@@ -203,11 +219,13 @@ def main():
         return
 
     index_to_word = {i: word for word, i in word_to_index.items()}
+    temperatures = [0.6, 0.8, 1.0, 1.2]  # Different temperatures to explore
+    bandit = MultiArmedBandit(temperatures)
 
     while True:
         user_input = input("Enter text: ").lower()
         user_input = re.sub(r'[^a-zA-Z\s]', '', user_input)
-        generated_text = generate_text(model, word_to_index, index_to_word, user_input, n, generate_length)
+        generated_text = generate_text_with_bandit(model, word_to_index, index_to_word, user_input, n, generate_length, bandit)
         print("Generated text:", generated_text)
         print()
 
