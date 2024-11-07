@@ -11,7 +11,7 @@ import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 import time  # Import the time module
 
 # Constants
-KB_MEMORY = 1000
+KB_MEMORY = 10000
 n = 3
 num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
@@ -184,8 +184,8 @@ def train_model(model, data_loader, num_epochs=num_epochs):
         eta_seconds = int(remaining_time % 60)
         
         print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {accuracy:.2f}%, ETA: {eta_minutes}m {eta_seconds}s remaining')
-
     torch.save(model.state_dict(), 'bayesian_lstm_model.pth')
+
     print("Model saved to bayesian_lstm_model.pth")
 
 
