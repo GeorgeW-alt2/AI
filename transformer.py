@@ -1,4 +1,3 @@
-#Transformer 0.61
 import numpy as np
 import pickle
 import re
@@ -10,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 50000
+KB_MEMORY_UNCOMPRESSED = 1000
 n = 3
 num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
@@ -70,34 +69,24 @@ class Attention(nn.Module):
         context_vector = attention_weights * encoder_outputs  # Shape: [batch_size, sequence_length, rnn_units]
         return context_vector.sum(dim=1), attention_weights
 
-# Automorphism layer for embedding transformations
-class AutomorphismLayer(nn.Module):
-    def __init__(self, embedding_dim):
-        super(AutomorphismLayer, self).__init__()
-        self.transform = nn.Linear(embedding_dim, embedding_dim, bias=False)
-
-    def forward(self, x):
-        return self.transform(x) + x  # Adds transformed and original embeddings
-
-# LSTM Model with Bayesian Linear Layers and Automorphism Layer
+# LSTM Model with Bayesian Linear Layers
 class BayesianLSTMModel(nn.Module):
     def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
         super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.automorphism_layer = AutomorphismLayer(embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
         self.attention = Attention(rnn_units)
         self.bayesian_fc = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=rnn_units, out_features=vocab_size)
+        self.latent_actuation = nn.Linear(rnn_units, rnn_units)  # Latent actuation
 
     def forward(self, x):
         x = self.embedding(x)
-        x = self.automorphism_layer(x)  # Apply automorphism transformation
         lstm_out, (hidden_state, _) = self.lstm(x)  # LSTM output and hidden state
         context_vector, _ = self.attention(hidden_state.squeeze(0), lstm_out)  # Squeeze hidden state to get correct shape
+        context_vector = self.latent_actuation(context_vector)  # Latent actuation applied to the context vector
         output = self.bayesian_fc(context_vector)  # Final Bayesian output with uncertainty
         return output  # Return only the logits
 
-# Training function
 def train_model(model, data_loader, num_epochs=num_epochs):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters())
@@ -124,12 +113,12 @@ def train_model(model, data_loader, num_epochs=num_epochs):
         
         print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {accuracy:.2f}%')
     
-    torch.save(model.state_dict(), 'bayesian_lstm_model.pth')
-    print("Model saved to bayesian_lstm_model.pth")
+    torch.save(model.state_dict(), 'bayesian_lstm_model.mdl')
+    print("Model saved to bayesian_lstm_model.mdl")
 
 def load_model(vocab_size):
     model = BayesianLSTMModel(vocab_size)
-    model.load_state_dict(torch.load('bayesian_lstm_model.pth', weights_only=True))
+    model.load_state_dict(torch.load('bayesian_lstm_model.mdl', weights_only=True))
     model.eval()
     return model
 
@@ -149,8 +138,8 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
     input_indices = [word_to_index.get(word, -1) for word in input_sequence]
     input_indices = [index for index in input_indices if index != -1]
     
-    if len(input_indices) < 1:
-        print("Input is too short for generating text.")
+    if len(input_indices) < 3:
+        print("Input is too short for generating text or contains many unknown words.")
         return ""
 
     input_tensor = torch.tensor(input_indices[-sequence_length:], dtype=torch.long).unsqueeze(0)
@@ -175,7 +164,7 @@ def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
 
     if choice == '1':
-        with open("xaa", encoding="UTF-8") as f:
+        with open("test.txt", encoding="UTF-8") as f:
             text_data = f.read()
         random.shuffle(text_data.split("."))
         text_data = '.'.join(text_data.split("."))
@@ -203,8 +192,7 @@ def main():
     index_to_word = {i: word for word, i in word_to_index.items()}
 
     while True:
-        user_input = input("Enter text: ").lower()
-        user_input = re.sub(r'[^a-zA-Z\s]', '', user_input)
+        user_input = input("Enter text: ")
         generated_text = generate_text(model, word_to_index, index_to_word, user_input, n, generate_length)
         print("Generated text:", generated_text)
         print()
