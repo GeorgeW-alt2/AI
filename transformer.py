@@ -68,8 +68,7 @@ class Attention(nn.Module):
         attention_weights = torch.softmax(scores, dim=1)  # Shape: [batch_size, sequence_length, 1]
         context_vector = attention_weights * encoder_outputs  # Shape: [batch_size, sequence_length, rnn_units]
         return context_vector.sum(dim=1), attention_weights
-
-# LSTM Model with Bayesian Linear Layers
+        
 class BayesianLSTMModel(nn.Module):
     def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
         super(BayesianLSTMModel, self).__init__()
@@ -77,15 +76,16 @@ class BayesianLSTMModel(nn.Module):
         self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
         self.attention = Attention(rnn_units)
         self.bayesian_fc = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=rnn_units, out_features=vocab_size)
-        self.latent_actuation = nn.Linear(rnn_units, rnn_units)  # Latent actuation
 
     def forward(self, x):
         x = self.embedding(x)
         lstm_out, (hidden_state, _) = self.lstm(x)  # LSTM output and hidden state
         context_vector, _ = self.attention(hidden_state.squeeze(0), lstm_out)  # Squeeze hidden state to get correct shape
-        context_vector = self.latent_actuation(context_vector)  # Latent actuation applied to the context vector
-        output = self.bayesian_fc(context_vector)  # Final Bayesian output with uncertainty
-        return output  # Return only the logits
+        
+        # Final Bayesian output with uncertainty
+        output = self.bayesian_fc(context_vector)
+        return output
+
 
 def train_model(model, data_loader, num_epochs=num_epochs):
     criterion = nn.CrossEntropyLoss()
@@ -138,8 +138,8 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
     input_indices = [word_to_index.get(word, -1) for word in input_sequence]
     input_indices = [index for index in input_indices if index != -1]
     
-    if len(input_indices) < 3:
-        print("Input is too short for generating text or contains many unknown words.")
+    if len(input_indices) < 1:
+        print("Input is too short for generating text or an unknown word.")
         return ""
 
     input_tensor = torch.tensor(input_indices[-sequence_length:], dtype=torch.long).unsqueeze(0)
