@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY_UNCOMPRESSED = 15000
 n = 3
 num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
@@ -70,7 +70,7 @@ class Attention(nn.Module):
         return context_vector.sum(dim=1), attention_weights
         
 class BayesianLSTMModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=50, rnn_units=128):
+    def __init__(self, vocab_size, embedding_dim=150, rnn_units=386):
         super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
@@ -166,7 +166,7 @@ def main():
     if choice == '1':
         with open("test.txt", encoding="UTF-8") as f:
             text_data = f.read()
-        random.shuffle(text_data.split("."))
+        random.shuffle(text_data.split("t"))
         text_data = '.'.join(text_data.split("."))
         word_to_index, vocab_size = build_vocabulary(text_data)
         with open("vocab_size.dat", 'w') as file:
@@ -175,7 +175,7 @@ def main():
         sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
         
         dataset = TextDataset(sequences)
-        data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
+        data_loader = DataLoader(dataset, batch_size=512, shuffle=True)
 
         model = BayesianLSTMModel(vocab_size)
         train_model(model, data_loader)
