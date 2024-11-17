@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY_UNCOMPRESSED = 15000
 n = 4  # Use quadgrams for training
 num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
@@ -148,8 +148,6 @@ def main():
     if choice == '1':
         with open("test.txt", encoding="UTF-8") as f:
             text_data = f.read()
-        random.shuffle(text_data.split("t"))
-        text_data = '.'.join(text_data.split("."))
         word_to_index, vocab_size = build_vocabulary(text_data)
         with open("vocab_size.dat", 'w') as file:
             file.write(str(vocab_size))
