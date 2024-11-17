@@ -7,11 +7,12 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
+from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 15000
+KB_MEMORY_UNCOMPRESSED = 17000
 n = 4  # Use quadgrams for training
-num_epochs = 45
+num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
 temperature = 0.7  # Temperature for softmax
 
@@ -65,9 +66,6 @@ class BayesianLSTMModel(nn.Module):
         # Final Bayesian output with uncertainty
         output = self.bayesian_fc(hidden_state[-1])  # Use the last hidden state from LSTM
         return output
-
-
-from tqdm import tqdm
 
 def train_model(model, data_loader, num_epochs=num_epochs):
     criterion = nn.CrossEntropyLoss()
