@@ -54,7 +54,35 @@ def decode_memory(memory):
 with open("test.txt", encoding="UTF-8") as f:
     textarray = f.read().split(".")[:99]  # Limit to first 99 sentences
 
-# Decode memory
-decoded_memory = decode_memory(memoryfunc(requests, request_descriptors, textarray))
+# Build the memory and decode it
+memory = memoryfunc(requests, request_descriptors, textarray)
+decoded_memory = decode_memory(memory)
 
-print("Response:", decoded_memory)
+#print("Response:", decoded_memory)
+while True:
+    # Get the user's input for specific contexts
+    specific_contexts = input("User: ").split()  # Contexts to include
+    descriptor = specific_contexts[0]
+    
+    # Initialize a set to store unique filtered arrays
+    unique_results = set()
+    
+    # Iterate through the decoded memory to find the relevant descriptor
+    for block in decoded_memory:
+        if descriptor in block:  # Ensure the descriptor exists in the block
+            arrays = block[descriptor]
+            
+            # Include arrays matching any specific contexts
+            filtered_arrays = [
+                array for array in arrays
+                if any(context in array for context in specific_contexts)
+            ]
+            
+            # Add filtered results to the unique_results set
+            unique_results.update(filtered_arrays)
+    
+    # Output the unique results
+    if any(array not in specific_contexts for array in unique_results):
+        print(f"Unique Results: {sorted(unique_results)}")
+    else:
+        print("No matches found.")
