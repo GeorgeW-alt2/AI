@@ -9,8 +9,8 @@ from torch.utils.data import Dataset, DataLoader
 import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 15000
-n = 3
+KB_MEMORY_UNCOMPRESSED = 1000
+n = 4  # Use quadgrams for training
 num_epochs = 30
 generate_length = 140  # Number of tokens to generate sequentially
 temperature = 0.7  # Temperature for softmax
@@ -51,39 +51,19 @@ class TextDataset(Dataset):
         seq, target = self.sequences[idx]
         return torch.tensor(seq, dtype=torch.long), torch.tensor(target, dtype=torch.long)
 
-# Attention mechanism (unchanged)
-class Attention(nn.Module):
-    def __init__(self, rnn_units):
-        super(Attention, self).__init__()
-        self.Wa = nn.Linear(rnn_units, rnn_units)
-        self.Ua = nn.Linear(rnn_units, rnn_units)
-        self.Va = nn.Linear(rnn_units, 1)
-
-    def forward(self, hidden_state, encoder_outputs):
-        hidden_state_expanded = hidden_state.unsqueeze(1)  # Shape: [batch_size, 1, rnn_units]
-        hidden_state_transformed = self.Ua(hidden_state_expanded)  # Shape: [batch_size, 1, rnn_units]
-        encoder_outputs_transformed = self.Wa(encoder_outputs)  # Shape: [batch_size, sequence_length, rnn_units]
-
-        scores = self.Va(torch.tanh(hidden_state_transformed + encoder_outputs_transformed))  # Shape: [batch_size, sequence_length, 1]
-        attention_weights = torch.softmax(scores, dim=1)  # Shape: [batch_size, sequence_length, 1]
-        context_vector = attention_weights * encoder_outputs  # Shape: [batch_size, sequence_length, rnn_units]
-        return context_vector.sum(dim=1), attention_weights
-        
+# Bayesian LSTM Model
 class BayesianLSTMModel(nn.Module):
     def __init__(self, vocab_size, embedding_dim=150, rnn_units=386):
         super(BayesianLSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
-        self.attention = Attention(rnn_units)
         self.bayesian_fc = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=rnn_units, out_features=vocab_size)
 
     def forward(self, x):
         x = self.embedding(x)
         lstm_out, (hidden_state, _) = self.lstm(x)  # LSTM output and hidden state
-        context_vector, _ = self.attention(hidden_state.squeeze(0), lstm_out)  # Squeeze hidden state to get correct shape
-        
         # Final Bayesian output with uncertainty
-        output = self.bayesian_fc(context_vector)
+        output = self.bayesian_fc(hidden_state[-1])  # Use the last hidden state from LSTM
         return output
 
 
@@ -135,6 +115,7 @@ def load_vocab_and_sequences():
 
 def generate_text(model, word_to_index, index_to_word, input_text, sequence_length, generate_length):
     input_sequence = preprocess_text(input_text)
+    # Use unigrams for input (process the input as a list of single words)
     input_indices = [word_to_index.get(word, -1) for word in input_sequence]
     input_indices = [index for index in input_indices if index != -1]
     
@@ -142,7 +123,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
         print("Input is too short for generating text or an unknown word.")
         return ""
 
-    input_tensor = torch.tensor(input_indices[-sequence_length:], dtype=torch.long).unsqueeze(0)
+    input_tensor = torch.tensor(input_indices[-1:], dtype=torch.long).unsqueeze(0)  # Use only the last word for input
 
     generated_text = []
     for _ in range(generate_length):
@@ -155,6 +136,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
 
             generated_text.append(predicted_word)
 
+            # Update the input sequence by appending the predicted word (unigram input)
             input_tensor = torch.cat((input_tensor[0][1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
 
     return ' '.join(generated_text)
@@ -175,7 +157,7 @@ def main():
         sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
         
         dataset = TextDataset(sequences)
-        data_loader = DataLoader(dataset, batch_size=512, shuffle=True)
+        data_loader = DataLoader(dataset, batch_size=256, shuffle=True)
 
         model = BayesianLSTMModel(vocab_size)
         train_model(model, data_loader)
