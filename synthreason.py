@@ -1,20 +1,22 @@
+KB_limit = 9999
 requests = ["actions.txt", "descriptions.txt", "adj.txt","nouns.txt"]
 request_descriptors = ["how", "describe", "define","what"]
-vocab = []
+import pickle
+from tqdm import tqdm
 
 # Function to build memory from requests and textarray
 def memoryfunc(requests, request_descriptors, textarray):
     vocab = []  # Initialize vocab list
     
-    # Read each request file into vocab
-    for request in requests:
+    # Read each request file into vocab with progress bar
+    for request in tqdm(requests, desc="Loading vocab files"):
         with open(request, encoding="UTF-8") as f:
             vocab.append(f.read().splitlines())  # Read lines directly into vocab
     
     memory = ""  # Initialize memory block
     
-    # Iterate through the sentences in textarray
-    for text in textarray:
+    # Iterate through the sentences in textarray with progress bar
+    for text in tqdm(textarray, desc="Building memory"):
         items = text.split()  # Split the sentence into words
         memorypreload = "["  # Initialize memory block for this text
         
@@ -50,39 +52,63 @@ def decode_memory(memory):
     return decoded
 
 
+# Save memory to a file
+def save_memory(memory, filename="memory.pkl"):
+    with open(filename, "wb") as f:
+        pickle.dump(memory, f)
+    print(f"Memory saved to {filename}")
+
+
+# Load memory from a file
+def load_memory(filename="memory.pkl"):
+    try:
+        with open(filename, "rb") as f:
+            memory = pickle.load(f)
+        print(f"Memory loaded from {filename}")
+        return memory
+    except FileNotFoundError:
+        print(f"File {filename} not found.")
+        return None
+
+
 # Read and split the text array
 with open("test.txt", encoding="UTF-8") as f:
-    textarray = f.read().split(".")[:99]  # Limit to first 99 sentences
+    textarray = f.read().split(".")[:KB_limit] # Limit to first 999 sentences
 
-# Build the memory and decode it
-memory = memoryfunc(requests, request_descriptors, textarray)
-decoded_memory = decode_memory(memory)
+# Main program loop
+if __name__ == "__main__":
+    # Attempt to load saved memory
+    memory = load_memory()
+    if not memory:  # If no saved memory, build it
+        memory = memoryfunc(requests, request_descriptors, textarray)
+        save_memory(memory)
 
-#print("Response:", decoded_memory)
-while True:
-    # Get the user's input for specific contexts
-    specific_contexts = input("User: ").split()  # Contexts to include
-    descriptor = specific_contexts[0]
-    
-    # Initialize a set to store unique filtered arrays
-    unique_results = set()
-    
-    # Iterate through the decoded memory to find the relevant descriptor
-    for block in decoded_memory:
-        if descriptor in block:  # Ensure the descriptor exists in the block
-            arrays = block[descriptor]
-            
-            # Include arrays matching any specific contexts
-            filtered_arrays = [
-                array for array in arrays
-                if any(context in array for context in specific_contexts)
-            ]
-            
-            # Add filtered results to the unique_results set
-            unique_results.update(filtered_arrays)
-    
-    # Output the unique results
-    if any(array not in specific_contexts for array in unique_results):
-        print(f"Unique Results: {sorted(unique_results)}")
-    else:
-        print("No matches found.")
+    decoded_memory = decode_memory(memory)
+
+    while True:
+        # Get the user's input for specific contexts
+        specific_contexts = input("User: ").split()  # Contexts to include
+        descriptor = specific_contexts[0]
+        
+        # Initialize a set to store unique filtered arrays
+        unique_results = set()
+        
+        # Iterate through the decoded memory to find the relevant descriptor
+        for block in decoded_memory:
+            if descriptor in block:  # Ensure the descriptor exists in the block
+                arrays = block[descriptor]
+                
+                # Include arrays matching any specific contexts
+                filtered_arrays = [
+                    array for array in arrays
+                    if any(context in array for context in specific_contexts)
+                ]
+                
+                # Add filtered results to the unique_results set
+                unique_results.update(filtered_arrays)
+        
+        # Output the unique results
+        if unique_results:
+            print(f"Unique Results: {sorted(unique_results)}")
+        else:
+            print("No matches found.")
