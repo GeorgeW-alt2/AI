@@ -11,7 +11,7 @@ import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 # Constants
 KB_MEMORY_UNCOMPRESSED = 15000
 n = 4  # Use quadgrams for training
-num_epochs = 30
+num_epochs = 45
 generate_length = 140  # Number of tokens to generate sequentially
 temperature = 0.7  # Temperature for softmax
 
@@ -67,6 +67,8 @@ class BayesianLSTMModel(nn.Module):
         return output
 
 
+from tqdm import tqdm
+
 def train_model(model, data_loader, num_epochs=num_epochs):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters())
@@ -76,7 +78,10 @@ def train_model(model, data_loader, num_epochs=num_epochs):
         correct_predictions = 0
         total_predictions = 0
         
-        for inputs, targets in data_loader:
+        # Create a tqdm progress bar for the training loop
+        progress_bar = tqdm(data_loader, desc=f"Epoch {epoch + 1}/{num_epochs}", dynamic_ncols=True)
+        
+        for inputs, targets in progress_bar:
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, targets)
@@ -88,6 +93,10 @@ def train_model(model, data_loader, num_epochs=num_epochs):
             correct_predictions += (predicted == targets).sum().item()
             total_predictions += targets.size(0)
 
+            # Update the progress bar with loss and accuracy
+            progress_bar.set_postfix(loss=total_loss / (len(progress_bar) + 1), 
+                                      accuracy=(correct_predictions / total_predictions) * 100)
+        
         epoch_loss = total_loss / len(data_loader)
         accuracy = correct_predictions / total_predictions * 100
         
@@ -95,6 +104,7 @@ def train_model(model, data_loader, num_epochs=num_epochs):
     
     torch.save(model.state_dict(), 'bayesian_lstm_model.mdl')
     print("Model saved to bayesian_lstm_model.mdl")
+
 
 def load_model(vocab_size):
     model = BayesianLSTMModel(vocab_size)
