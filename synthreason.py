@@ -1,4 +1,4 @@
-KB_limit = 9999
+KB_limit = 9999 # -1 for all
 requests = ["actions.txt", "descriptions.txt", "adj.txt","nouns.txt"]
 request_descriptors = ["how", "describe", "define","what"]
 import pickle
