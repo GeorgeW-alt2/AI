@@ -109,6 +109,6 @@ if __name__ == "__main__":
         
         # Output the unique results
         if unique_results:
-            print(f"Unique Results: {sorted(unique_results)}")
+            print(f"Unique Results: {unique_results}")
         else:
             print("No matches found.")
