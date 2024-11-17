@@ -96,11 +96,6 @@ def train_model(model, data_loader, num_epochs=num_epochs):
             # Update the progress bar with loss and accuracy
             progress_bar.set_postfix(loss=total_loss / (len(progress_bar) + 1), 
                                       accuracy=(correct_predictions / total_predictions) * 100)
-        
-        epoch_loss = total_loss / len(data_loader)
-        accuracy = correct_predictions / total_predictions * 100
-        
-        print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {accuracy:.2f}%')
     
     torch.save(model.state_dict(), 'bayesian_lstm_model.mdl')
     print("Model saved to bayesian_lstm_model.mdl")
