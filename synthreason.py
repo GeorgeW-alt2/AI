@@ -1,5 +1,5 @@
-requests = ["actions.txt", "descriptions.txt", "adj.txt"]
-request_descriptors = ["how", "what", "define"]
+requests = ["actions.txt", "descriptions.txt", "adj.txt","nouns.txt"]
+request_descriptors = ["how", "describe", "define","what"]
 vocab = []
 
 # Function to build memory from requests and textarray
