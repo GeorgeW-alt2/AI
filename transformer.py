@@ -152,7 +152,7 @@ def main():
         with open("test.txt", encoding="UTF-8") as f:
             text_data = f.read()
         word_to_index, vocab_size = build_vocabulary(text_data)
-        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
+        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=1)
         dataset = TextDataset(sequences)
         data_loader = DataLoader(dataset, batch_size=256, shuffle=True)
 
@@ -172,7 +172,7 @@ def main():
 
     while True:
         user_input = input("Enter text: ")
-        generated_text = generate_text(model, word_to_index, index_to_word, user_input, n, generate_length)
+        generated_text = generate_text(model, word_to_index, index_to_word, user_input, 1, generate_length)
         print("Generated text:", generated_text)
         print()
 
