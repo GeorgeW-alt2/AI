@@ -6,15 +6,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-import torchbnn as bnn  # Bayesian Neural Networks for uncertainty
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 17000
+KB_MEMORY_UNCOMPRESSED = 1000
 n = 4  # Use quadgrams for training
 num_epochs = 30
-generate_length = 140  # Number of tokens to generate sequentially
-temperature = 0.7  # Temperature for softmax
+generate_length = 140
+temperature = 0.7
 
 # Preprocessing and Tokenization
 def preprocess_text(text):
@@ -52,21 +51,33 @@ class TextDataset(Dataset):
         seq, target = self.sequences[idx]
         return torch.tensor(seq, dtype=torch.long), torch.tensor(target, dtype=torch.long)
 
-# Bayesian LSTM Model
-class BayesianLSTMModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=150, rnn_units=386):
-        super(BayesianLSTMModel, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.lstm = nn.LSTM(embedding_dim, rnn_units, batch_first=True)
-        self.bayesian_fc = bnn.BayesLinear(prior_mu=0, prior_sigma=0.1, in_features=rnn_units, out_features=vocab_size)
+# Knowledge-Augmented Embedding
+class KANEmbedding(nn.Module):
+    def __init__(self, vocab_size, embedding_dim, knowledge_dim):
+        super(KANEmbedding, self).__init__()
+        self.word_embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.knowledge_embedding = nn.Embedding(vocab_size, knowledge_dim)
+
+    def forward(self, x):
+        word_embed = self.word_embedding(x)
+        knowledge_embed = self.knowledge_embedding(x)
+        return torch.cat((word_embed, knowledge_embed), dim=-1)
+
+# Knowledge-Augmented Bayesian LSTM Model
+class KnowledgeAugmentedLSTM(nn.Module):
+    def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386):
+        super(KnowledgeAugmentedLSTM, self).__init__()
+        self.embedding = KANEmbedding(vocab_size, embedding_dim, knowledge_dim)
+        self.lstm = nn.LSTM(embedding_dim + knowledge_dim, rnn_units, batch_first=True)
+        self.fc = nn.Linear(rnn_units, vocab_size)
 
     def forward(self, x):
         x = self.embedding(x)
-        lstm_out, (hidden_state, _) = self.lstm(x)  # LSTM output and hidden state
-        # Final Bayesian output with uncertainty
-        output = self.bayesian_fc(hidden_state[-1])  # Use the last hidden state from LSTM
+        lstm_out, (hidden_state, _) = self.lstm(x)
+        output = self.fc(hidden_state[-1])
         return output
 
+# Training Function
 def train_model(model, data_loader, num_epochs=num_epochs):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters())
@@ -76,7 +87,6 @@ def train_model(model, data_loader, num_epochs=num_epochs):
         correct_predictions = 0
         total_predictions = 0
         
-        # Create a tqdm progress bar for the training loop
         progress_bar = tqdm(data_loader, desc=f"Epoch {epoch + 1}/{num_epochs}", dynamic_ncols=True)
         
         for inputs, targets in progress_bar:
@@ -91,20 +101,13 @@ def train_model(model, data_loader, num_epochs=num_epochs):
             correct_predictions += (predicted == targets).sum().item()
             total_predictions += targets.size(0)
 
-            # Update the progress bar with loss and accuracy
             progress_bar.set_postfix(loss=total_loss / (len(progress_bar) + 1), 
                                       accuracy=(correct_predictions / total_predictions) * 100)
     
-    torch.save(model.state_dict(), 'bayesian_lstm_model.mdl')
-    print("Model saved to bayesian_lstm_model.mdl")
+    torch.save(model.state_dict(), 'knowledge_augmented_lstm.mdl')
+    print("Model saved to knowledge_augmented_lstm.mdl")
 
-
-def load_model(vocab_size):
-    model = BayesianLSTMModel(vocab_size)
-    model.load_state_dict(torch.load('bayesian_lstm_model.mdl', weights_only=True))
-    model.eval()
-    return model
-
+# Save and Load Functions
 def save_vocab_and_sequences(word_to_index, vocab_size, sequences):
     with open('vocab.pkl', 'wb') as f:
         pickle.dump((word_to_index, vocab_size, sequences), f)
@@ -116,9 +119,9 @@ def load_vocab_and_sequences():
     print("Vocabulary and sequences loaded from vocab.pkl")
     return word_to_index, vocab_size, sequences
 
+# Text Generation
 def generate_text(model, word_to_index, index_to_word, input_text, sequence_length, generate_length):
     input_sequence = preprocess_text(input_text)
-    # Use unigrams for input (process the input as a list of single words)
     input_indices = [word_to_index.get(word, -1) for word in input_sequence]
     input_indices = [index for index in input_indices if index != -1]
     
@@ -126,25 +129,22 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
         print("Input is too short for generating text or an unknown word.")
         return ""
 
-    input_tensor = torch.tensor(input_indices[-1:], dtype=torch.long).unsqueeze(0)  # Use only the last word for input
+    input_tensor = torch.tensor(input_indices[-1:], dtype=torch.long).unsqueeze(0)
 
     generated_text = []
     for _ in range(generate_length):
         with torch.no_grad():
-            output = model(input_tensor)  # This now only returns logits
-
+            output = model(input_tensor)
             output_dist = output.data.div(temperature).exp()
             predicted_index = torch.multinomial(output_dist, 1).item()
             predicted_word = index_to_word[predicted_index]
 
             generated_text.append(predicted_word)
-
-            # Update the input sequence by appending the predicted word (unigram input)
             input_tensor = torch.cat((input_tensor[0][1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
 
     return ' '.join(generated_text)
 
-
+# Main Function
 def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
 
@@ -152,22 +152,18 @@ def main():
         with open("test.txt", encoding="UTF-8") as f:
             text_data = f.read()
         word_to_index, vocab_size = build_vocabulary(text_data)
-        with open("vocab_size.dat", 'w') as file:
-            file.write(str(vocab_size))
-        
         sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=n)
-        
         dataset = TextDataset(sequences)
         data_loader = DataLoader(dataset, batch_size=256, shuffle=True)
 
-        model = BayesianLSTMModel(vocab_size)
+        model = KnowledgeAugmentedLSTM(vocab_size)
         train_model(model, data_loader)
         save_vocab_and_sequences(word_to_index, vocab_size, sequences)
     elif choice == '2':
-        with open("vocab_size.dat", encoding="UTF-8") as f:
-            vocab_size = int(f.read())
-        model = load_model(vocab_size)
         word_to_index, vocab_size, sequences = load_vocab_and_sequences()
+        model = KnowledgeAugmentedLSTM(vocab_size)
+        model.load_state_dict(torch.load('knowledge_augmented_lstm.mdl'))
+        model.eval()
     else:
         print("Invalid choice. Exiting.")
         return
