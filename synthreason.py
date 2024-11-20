@@ -1,8 +1,10 @@
-KB_limit = 9999 # -1 for all
-requests = ["actions.txt", "descriptions.txt", "adj.txt","nouns.txt"]
-request_descriptors = ["how", "describe", "define","what"]
+from gtts import gTTS
 import pickle
 from tqdm import tqdm
+
+KB_limit = 99  # -1 for all
+requests = ["actions.txt", "descriptions.txt", "adj.txt", "nouns.txt"]
+request_descriptors = ["how", "describe", "define", "what"]
 
 # Function to build memory from requests and textarray
 def memoryfunc(requests, request_descriptors, textarray):
@@ -71,9 +73,14 @@ def load_memory(filename="memory.pkl"):
         return None
 
 
+# Text-to-speech function
+def text_to_speech(text,file):
+    tts = gTTS(text, lang="en")
+    tts.save(' '.join(file)+".mp3")
+
 # Read and split the text array
 with open("test.txt", encoding="UTF-8") as f:
-    textarray = f.read().split(".")[:KB_limit] # Limit to first 999 sentences
+    textarray = f.read().split(".")[:KB_limit]  # Limit to first 999 sentences
 
 # Main program loop
 if __name__ == "__main__":
@@ -109,6 +116,13 @@ if __name__ == "__main__":
         
         # Output the unique results
         if unique_results:
-            print(f"Unique Results: {unique_results}")
+            results_text = f": {', '.join(unique_results)}"
+            print(results_text)
+            text_to_speech(results_text,specific_contexts)
         else:
-            print("No matches found.")
+            no_match_text = "No matches found."
+            print(no_match_text)
+            
+
+
+
