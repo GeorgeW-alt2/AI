@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 5000
+KB_MEMORY_UNCOMPRESSED = 1000
 n = 4  # Use quadgrams for training
 num_epochs = 30
 generate_length = 140
@@ -152,7 +152,7 @@ def main():
         with open("xaa", encoding="UTF-8") as f:
             text_data = f.read()
         word_to_index, vocab_size = build_vocabulary(text_data)
-        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=1)
+        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=2)
         dataset = TextDataset(sequences)
         data_loader = DataLoader(dataset, batch_size=256, shuffle=True)
 
