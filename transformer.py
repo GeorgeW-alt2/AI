@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY_UNCOMPRESSED = 5000
 n = 4  # Use quadgrams for training
 num_epochs = 30
 generate_length = 140
@@ -149,7 +149,7 @@ def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
 
     if choice == '1':
-        with open("test.txt", encoding="UTF-8") as f:
+        with open("xaa", encoding="UTF-8") as f:
             text_data = f.read()
         word_to_index, vocab_size = build_vocabulary(text_data)
         sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=1)
