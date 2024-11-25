@@ -140,7 +140,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
             predicted_word = index_to_word[predicted_index]
 
             generated_text.append(predicted_word)
-            input_tensor = torch.cat((input_tensor[0][1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
+            input_tensor = torch.cat((input_tensor[0][-2:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
 
     return ' '.join(generated_text)
 
