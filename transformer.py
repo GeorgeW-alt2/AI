@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 # Constants
 KB_MEMORY_UNCOMPRESSED = 1000
-n = 4  # Use quadgrams for training
+n = 2  # Use quadgrams for training
 num_epochs = 30
 generate_length = 140
 temperature = 0.7
@@ -36,7 +36,7 @@ def create_sequences(word_to_index, text, sequence_length):
     sequences = []
     encoded = [word_to_index[word] for word in text]
     for i in range(sequence_length, len(encoded)):
-        sequences.append((encoded[i-sequence_length:i], encoded[i]))
+        sequences.append((encoded[i:sequence_length-i], encoded[i]))
     return sequences
 
 # Dataset class
