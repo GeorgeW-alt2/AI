@@ -1,4 +1,4 @@
-# transformer LLM v1.0
+# transformer LLM v1.1
 import numpy as np
 import pickle
 import re
@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 # Constants
 KB_MEMORY_UNCOMPRESSED = 1000
-n = 4  # Use quadgrams for training
+n = 3  # Use quadgrams for training
 num_epochs = 30
 generate_length = 140
 temperature = 0.7
