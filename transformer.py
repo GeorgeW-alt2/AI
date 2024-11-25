@@ -1,3 +1,4 @@
+# transformer LLM v1.0
 import numpy as np
 import pickle
 import re
@@ -10,7 +11,7 @@ from tqdm import tqdm
 
 # Constants
 KB_MEMORY_UNCOMPRESSED = 1000
-n = 2  # Use quadgrams for training
+n = 4  # Use quadgrams for training
 num_epochs = 30
 generate_length = 140
 temperature = 0.7
@@ -36,7 +37,7 @@ def create_sequences(word_to_index, text, sequence_length):
     sequences = []
     encoded = [word_to_index[word] for word in text]
     for i in range(sequence_length, len(encoded)):
-        sequences.append((encoded[i:sequence_length-i], encoded[i]))
+        sequences.append((encoded[i-sequence_length:i], encoded[i]))
     return sequences
 
 # Dataset class
@@ -149,10 +150,10 @@ def main():
     choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
 
     if choice == '1':
-        with open("xaa", encoding="UTF-8") as f:
+        with open("test.txt", encoding="UTF-8") as f:
             text_data = f.read()
         word_to_index, vocab_size = build_vocabulary(text_data)
-        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=2)
+        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=1)
         dataset = TextDataset(sequences)
         data_loader = DataLoader(dataset, batch_size=256, shuffle=True)
 
