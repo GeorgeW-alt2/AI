@@ -1,4 +1,4 @@
-# transformer LLM v1.2
+# transformer LLM v1.3
 import numpy as np
 import pickle
 import re
@@ -10,16 +10,16 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY_UNCOMPRESSED = 3000
 n = 3  # Use quadgrams for training
-num_epochs = 30
+num_epochs = 10
 generate_length = 140
 temperature = 0.7
 
 # Preprocessing and Tokenization
 def preprocess_text(text):
-    cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
-    tokens = cleaned_text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
+    #cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
+    tokens = text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
     return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
 
 def build_vocabulary(text_data):
