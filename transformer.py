@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY_UNCOMPRESSED = 3000
 n = 3  # Use quadgrams for training
 num_epochs = 25
 generate_length = 140
@@ -20,7 +20,7 @@ temperature = 0.7
 def preprocess_text(text):
     #cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
     tokens = text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
-    return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
+    return [word for word in tokens]
 
 def build_vocabulary(text_data):
     tokens = preprocess_text(text_data)
@@ -180,7 +180,7 @@ def main():
     while True:
         user_input = input("Enter text: ")
         generated_text = generate_text(model, word_to_index, index_to_word, user_input, n, generate_length)
-        print("Generated text:", generated_text)
+        print("Generated text:", generated_text.split(".")[0]+".")
         print()
 
 if __name__ == '__main__':
