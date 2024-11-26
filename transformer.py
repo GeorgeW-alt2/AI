@@ -1,4 +1,4 @@
-# transformer LLM v1.1
+# transformer LLM v1.2
 import numpy as np
 import pickle
 import re
@@ -65,17 +65,23 @@ class KANEmbedding(nn.Module):
         return torch.cat((word_embed, knowledge_embed), dim=-1)
 
 # Knowledge-Augmented Bayesian LSTM Model
+# Updated Knowledge-Augmented Bayesian LSTM Model
 class KnowledgeAugmentedLSTM(nn.Module):
     def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386):
         super(KnowledgeAugmentedLSTM, self).__init__()
         self.embedding = KANEmbedding(vocab_size, embedding_dim, knowledge_dim)
-        self.lstm = nn.LSTM(embedding_dim + knowledge_dim, rnn_units, batch_first=True)
-        self.fc = nn.Linear(rnn_units, vocab_size)
+        self.bidirectional_lstm = nn.LSTM(embedding_dim + knowledge_dim, rnn_units, 
+                                          batch_first=True, bidirectional=True)
+        self.fc = nn.Linear(rnn_units * 2, vocab_size)  # Adjust for bidirection
 
     def forward(self, x):
         x = self.embedding(x)
-        lstm_out, (hidden_state, _) = self.lstm(x)
-        output = self.fc(hidden_state[-1])
+        lstm_out, _ = self.bidirectional_lstm(x)
+        # Use both forward and backward outputs
+        lstm_out_forward = lstm_out[:, -1, :self.fc.in_features // 2]  # Forward direction
+        lstm_out_backward = lstm_out[:, 0, self.fc.in_features // 2:]  # Backward direction
+        lstm_out_combined = torch.cat((lstm_out_forward, lstm_out_backward), dim=-1)
+        output = self.fc(lstm_out_combined)
         return output
 
 # Training Function
@@ -141,7 +147,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
             predicted_word = index_to_word[predicted_index]
 
             generated_text.append(predicted_word)
-            input_tensor = torch.cat((input_tensor[0][-2:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
+            input_tensor = torch.cat((input_tensor[0][-2:], torch.tensor([predicted_index])), dim=0).unsqueeze(0).repeat(1,3)
 
     return ' '.join(generated_text)
 
@@ -153,7 +159,7 @@ def main():
         with open("test.txt", encoding="UTF-8") as f:
             text_data = f.read()
         word_to_index, vocab_size = build_vocabulary(text_data)
-        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=1)
+        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=3)
         dataset = TextDataset(sequences)
         data_loader = DataLoader(dataset, batch_size=256, shuffle=True)
 
@@ -173,7 +179,7 @@ def main():
 
     while True:
         user_input = input("Enter text: ")
-        generated_text = generate_text(model, word_to_index, index_to_word, user_input, 1, generate_length)
+        generated_text = generate_text(model, word_to_index, index_to_word, user_input, n, generate_length)
         print("Generated text:", generated_text)
         print()
 
