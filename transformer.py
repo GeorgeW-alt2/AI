@@ -1,4 +1,4 @@
-# transformer LLM v1.3
+# transformer LLM v1.4
 import numpy as np
 import pickle
 import re
@@ -10,9 +10,9 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 3000
+KB_MEMORY_UNCOMPRESSED = 1000
 n = 3  # Use quadgrams for training
-num_epochs = 10
+num_epochs = 25
 generate_length = 140
 temperature = 0.7
 
