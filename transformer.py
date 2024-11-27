@@ -1,4 +1,3 @@
-# transformer LLM v1.4
 import numpy as np
 import pickle
 import re
@@ -10,17 +9,17 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 3000
-n = 3  # Use quadgrams for training
-num_epochs = 25
+KB_MEMORY_UNCOMPRESSED = 4000
+n = 4  # Use quadgrams for training
+num_epochs = 30
 generate_length = 140
 temperature = 0.7
 
 # Preprocessing and Tokenization
 def preprocess_text(text):
-    #cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
-    tokens = text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
-    return [word for word in tokens]
+    cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
+    tokens = cleaned_text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
+    return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
 
 def build_vocabulary(text_data):
     tokens = preprocess_text(text_data)
@@ -64,25 +63,65 @@ class KANEmbedding(nn.Module):
         knowledge_embed = self.knowledge_embedding(x)
         return torch.cat((word_embed, knowledge_embed), dim=-1)
 
-# Knowledge-Augmented Bayesian LSTM Model
-# Updated Knowledge-Augmented Bayesian LSTM Model
+# Knowledge-Augmented Bayesian LSTM Model with Uncertainty Layer
 class KnowledgeAugmentedLSTM(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386):
+    def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386, dropout_rate=0.3):
         super(KnowledgeAugmentedLSTM, self).__init__()
         self.embedding = KANEmbedding(vocab_size, embedding_dim, knowledge_dim)
-        self.bidirectional_lstm = nn.LSTM(embedding_dim + knowledge_dim, rnn_units, 
-                                          batch_first=True, bidirectional=True)
-        self.fc = nn.Linear(rnn_units * 2, vocab_size)  # Adjust for bidirection
-
-    def forward(self, x):
+        self.lstm = nn.LSTM(embedding_dim + knowledge_dim, rnn_units, batch_first=True)
+        self.fc = nn.Linear(rnn_units, vocab_size)
+        self.dropout = nn.Dropout(dropout_rate)
+    
+    # Apply Monte Carlo Dropout during inference to estimate uncertainty
+    def forward(self, x, apply_dropout=False):
         x = self.embedding(x)
-        lstm_out, _ = self.bidirectional_lstm(x)
-        # Use both forward and backward outputs
-        lstm_out_forward = lstm_out[:, -1, :self.fc.in_features // 2]  # Forward direction
-        lstm_out_backward = lstm_out[:, 0, self.fc.in_features // 2:]  # Backward direction
-        lstm_out_combined = torch.cat((lstm_out_forward, lstm_out_backward), dim=-1)
-        output = self.fc(lstm_out_combined)
+        lstm_out, (hidden_state, _) = self.lstm(x)
+        output = self.fc(hidden_state[-1])
+        
+        # Apply dropout during inference (for uncertainty estimation)
+        if apply_dropout:
+            output = self.dropout(output)
+        
         return output
+
+    # Generate text with uncertainty by sampling multiple times and calculating variance
+    def generate_with_uncertainty(self, model, word_to_index, index_to_word, input_text, sequence_length, generate_length, temperature=0.7, num_samples=5):
+        input_sequence = preprocess_text(input_text)
+        input_indices = [word_to_index.get(word, -1) for word in input_sequence]
+        input_indices = [index for index in input_indices if index != -1]
+        
+        if len(input_indices) < 1:
+            print("Input is too short for generating text or an unknown word.")
+            return ""
+
+        input_tensor = torch.tensor(input_indices[-1:], dtype=torch.long).unsqueeze(0)
+        generated_texts = []
+
+        # Perform multiple generations to estimate uncertainty
+        for _ in range(num_samples):
+            generated_text = []
+            for _ in range(generate_length):
+                with torch.no_grad():
+                    output = model(input_tensor, apply_dropout=True)  # Enable dropout during inference
+                    output_dist = output.data.div(temperature).exp()
+                    predicted_index = torch.multinomial(output_dist, 1).item()
+                    predicted_word = index_to_word[predicted_index]
+                    generated_text.append(predicted_word)
+                    input_tensor = torch.cat((input_tensor[0][-2:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
+            generated_texts.append(generated_text)
+
+        # Aggregate predictions (e.g., by choosing the most frequent words across the samples)
+        aggregated_text = self.aggregate_generated_texts(generated_texts)
+        return ' '.join(aggregated_text)
+
+    def aggregate_generated_texts(self, generated_texts):
+        # Combine multiple generated texts and select the most frequent word at each position
+        all_words = list(zip(*generated_texts))  # Transpose to get words at each position
+        aggregated_text = []
+        for words in all_words:
+            most_common_word = max(set(words), key=words.count)
+            aggregated_text.append(most_common_word)
+        return aggregated_text
 
 # Training Function
 def train_model(model, data_loader, num_epochs=num_epochs):
@@ -111,8 +150,8 @@ def train_model(model, data_loader, num_epochs=num_epochs):
             progress_bar.set_postfix(loss=total_loss / (len(progress_bar) + 1), 
                                       accuracy=(correct_predictions / total_predictions) * 100)
     
-    torch.save(model.state_dict(), 'knowledge_augmented_lstm.mdl')
-    print("Model saved to knowledge_augmented_lstm.mdl")
+    torch.save(model.state_dict(), 'knowledge_augmented_lstm_with_uncertainty.mdl')
+    print("Model saved to knowledge_augmented_lstm_with_uncertainty.mdl")
 
 # Save and Load Functions
 def save_vocab_and_sequences(word_to_index, vocab_size, sequences):
@@ -147,7 +186,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
             predicted_word = index_to_word[predicted_index]
 
             generated_text.append(predicted_word)
-            input_tensor = torch.cat((input_tensor[0][-2:], torch.tensor([predicted_index])), dim=0).unsqueeze(0).repeat(1,3)
+            input_tensor = torch.cat((input_tensor[0][-2:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
 
     return ' '.join(generated_text)
 
@@ -159,7 +198,7 @@ def main():
         with open("test.txt", encoding="UTF-8") as f:
             text_data = f.read()
         word_to_index, vocab_size = build_vocabulary(text_data)
-        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=3)
+        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=1)
         dataset = TextDataset(sequences)
         data_loader = DataLoader(dataset, batch_size=256, shuffle=True)
 
@@ -169,7 +208,7 @@ def main():
     elif choice == '2':
         word_to_index, vocab_size, sequences = load_vocab_and_sequences()
         model = KnowledgeAugmentedLSTM(vocab_size)
-        model.load_state_dict(torch.load('knowledge_augmented_lstm.mdl'))
+        model.load_state_dict(torch.load('knowledge_augmented_lstm_with_uncertainty.mdl'))
         model.eval()
     else:
         print("Invalid choice. Exiting.")
@@ -178,10 +217,8 @@ def main():
     index_to_word = {i: word for word, i in word_to_index.items()}
 
     while True:
-        user_input = input("Enter text: ")
-        generated_text = generate_text(model, word_to_index, index_to_word, user_input, n, generate_length)
-        print("Generated text:", generated_text.split(".")[0]+".")
-        print()
-
-if __name__ == '__main__':
+        input_text = input("User: ")
+        print("AI:",generate_text(model, word_to_index, index_to_word, input_text, sequence_length=3, generate_length=generate_length))
+          
+if __name__ == "__main__":
     main()
