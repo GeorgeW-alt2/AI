@@ -1,185 +1,187 @@
-import numpy as np
-import pickle
-import re
-import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-from tqdm import tqdm
+import random
 
-# Constants
-KB_MEMORY_UNCOMPRESSED = 4000
-n = 4  # Use quadgrams for training
+KBfilename = "xaa"
+KB_MEM = -1 # -1 for unlimited
 num_epochs = 20
-generate_length = 140
-temperature = 0.7
 
-# Preprocessing and Tokenization
-def preprocess_text(text):
-    cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
-    tokens = text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
-    return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
-
-def build_vocabulary(text_data):
-    tokens = preprocess_text(text_data)
-    word_counts = {}
-    for word in tokens:
-        word_counts[word] = word_counts.get(word, 0) + 1
-    
-    vocab = sorted(word_counts, key=word_counts.get, reverse=True)
-    vocab_size = len(vocab)
-    word_to_index = {word: i for i, word in enumerate(vocab)}
-    return word_to_index, vocab_size
-
-def create_sequences(word_to_index, text, sequence_length):
-    sequences = []
-    encoded = [word_to_index[word] for word in text]
-    for i in range(sequence_length, len(encoded)):
-        sequences.append((encoded[i-sequence_length:i], encoded[i]))
-    return sequences
-
-# Dataset class
-class TextDataset(Dataset):
-    def __init__(self, sequences):
-        self.sequences = sequences
-
-    def __len__(self):
-        return len(self.sequences)
-
-    def __getitem__(self, idx):
-        seq, target = self.sequences[idx]
-        return torch.tensor(seq, dtype=torch.long), torch.tensor(target, dtype=torch.long)
-
-# Knowledge-Augmented Embedding
-class KANEmbedding(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, knowledge_dim):
-        super(KANEmbedding, self).__init__()
-        self.word_embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.knowledge_embedding = nn.Embedding(vocab_size, knowledge_dim)
-
-    def forward(self, x):
-        word_embed = self.word_embedding(x)
-        knowledge_embed = self.knowledge_embedding(x)
-        return torch.cat((word_embed, knowledge_embed), dim=-1)
-
-# Knowledge-Augmented Bayesian LSTM Model with Uncertainty Layer
-class KnowledgeAugmentedLSTM(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386, dropout_rate=0.3):
-        super(KnowledgeAugmentedLSTM, self).__init__()
-        self.embedding = KANEmbedding(vocab_size, embedding_dim, knowledge_dim)
-        self.lstm = nn.LSTM(embedding_dim + knowledge_dim, rnn_units, batch_first=True)
-        self.fc = nn.Linear(rnn_units, vocab_size)
-        self.dropout = nn.Dropout(dropout_rate)
-    
-    # Apply Monte Carlo Dropout during inference to estimate uncertainty
-    def forward(self, x, apply_dropout=False):
-        x = self.embedding(x)
-        lstm_out, (hidden_state, _) = self.lstm(x)
-        output = self.fc(hidden_state[-1])
+# Define the Agent class which will contain the neural network model
+class Agent(nn.Module):
+    def __init__(self, vocab_size, embedding_dim=12800, hidden_dim=12800, sequence_length=10):
+        super(Agent, self).__init__()
+        self.sequence_length = sequence_length
+        self.embedding_dim = embedding_dim
+        self.hidden_dim = hidden_dim
+        self.vocab_size = vocab_size
         
-        # Apply dropout during inference (for uncertainty estimation)
-        if apply_dropout:
-            output = self.dropout(output)
+        # Embedding layer to transform word indices to vectors
+        self.embeddings = nn.Embedding(vocab_size, embedding_dim)
         
+        # Fully connected layers
+        self.fc1 = nn.Linear(sequence_length * embedding_dim, hidden_dim)  # Adjusted for the correct flattened size
+        self.fc2 = nn.Linear(hidden_dim, vocab_size)
+
+    def forward(self, state):
+        # Apply embedding layer to the state (word indices)
+        embedded_state = self.embeddings(state)  # Shape: (batch_size, sequence_length, embedding_dim)
+
+        # Flatten the state (sequence_length * embedding_dim)
+        flattened_state = embedded_state.view(embedded_state.size(0), -1)  # Flatten to shape (batch_size, sequence_length * embedding_dim)
+
+        # Pass through the fully connected layers
+        x = torch.relu(self.fc1(flattened_state))
+        output = self.fc2(x)
         return output
 
-# Training Function
-def train_model(model, data_loader, num_epochs=num_epochs):
+    def save(self, filepath):
+        """Save the model and its configuration to the given filepath"""
+        torch.save({
+            'vocab_size': self.vocab_size,
+            'embedding_dim': self.embedding_dim,
+            'hidden_dim': self.hidden_dim,
+            'sequence_length': self.sequence_length,
+            'state_dict': self.state_dict(),
+        }, filepath)
+        print(f"Model saved to {filepath}")
+
+    def load(self, filepath):
+        """Load the model and its configuration from the given filepath"""
+        checkpoint = torch.load(filepath)
+        self.vocab_size = checkpoint['vocab_size']
+        self.embedding_dim = checkpoint['embedding_dim']
+        self.hidden_dim = checkpoint['hidden_dim']
+        self.sequence_length = checkpoint['sequence_length']
+        self.load_state_dict(checkpoint['state_dict'])
+        self.eval()  # Set the model to evaluation mode after loading
+        print(f"Model loaded from {filepath}")
+
+# Define a simple environment class to handle the state and actions
+class Environment:
+    def __init__(self, vocab):
+        self.vocab = vocab
+        self.word_to_index = {word: i for i, word in enumerate(vocab)}
+        self.index_to_word = {i: word for i, word in enumerate(vocab)}
+        self.state = []
+
+    def reset(self):
+        # Reset the state to the beginning (empty or initial state)
+        self.state = []
+        return self.state
+
+    def step(self, action):
+        # Append the action to the state and return the new state
+        self.state.append(action)
+        return self.state
+
+# Function to train the agent
+def train(agent, env, num_epochs=100, batch_size=32, learning_rate=0.001):
+    optimizer = optim.Adam(agent.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters())
 
+    # Training loop
     for epoch in range(num_epochs):
-        total_loss = 0
-        correct_predictions = 0
-        total_predictions = 0
+        optimizer.zero_grad()
         
-        progress_bar = tqdm(data_loader, desc=f"Epoch {epoch + 1}/{num_epochs}", dynamic_ncols=True)
+        # Generate a random sequence of words (length sequence_length + 1)
+        random_start = random.randint(0, len(env.vocab) - agent.sequence_length - 1)
+        input_sequence = env.vocab[random_start:random_start + agent.sequence_length]
+        target_word = env.vocab[random_start + agent.sequence_length]
         
-        for inputs, targets in progress_bar:
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
+        input_state = torch.tensor([env.word_to_index[word] for word in input_sequence], dtype=torch.long).unsqueeze(0)  # Shape: (1, sequence_length)
+        
+        # Forward pass
+        output = agent(input_state)  # Shape: (batch_size, vocab_size)
 
-            total_loss += loss.item()
-            _, predicted = torch.max(outputs, 1)
-            correct_predictions += (predicted == targets).sum().item()
-            total_predictions += targets.size(0)
+        # Compute the loss (using CrossEntropyLoss)
+        target_word_index = env.word_to_index[target_word]
+        loss = criterion(output, torch.tensor([target_word_index], dtype=torch.long))
+        
+        # Backpropagation
+        loss.backward()
+        optimizer.step()
 
-            progress_bar.set_postfix(loss=total_loss / (len(progress_bar) + 1), 
-                                      accuracy=(correct_predictions / total_predictions) * 100)
+        print(f"Epoch [{epoch}/{num_epochs}], Loss: {loss.item():.4f}")
+
+# Function to generate text from the agent
+def generate_text(agent, env, input_text, sequence_length=1, max_length=50):
+    agent.eval()  # Set the model to evaluation mode
     
-    torch.save(model.state_dict(), 'knowledge_augmented_lstm.mdl')
-    print("Model saved to knowledge_augmented_lstm.mdl")
-
-# Save and Load Functions
-def save_vocab_and_sequences(word_to_index, vocab_size, sequences):
-    with open('vocab.pkl', 'wb') as f:
-        pickle.dump((word_to_index, vocab_size, sequences), f)
-    print("Vocabulary and sequences saved to vocab.pkl")
-
-def load_vocab_and_sequences():
-    with open('vocab.pkl', 'rb') as f:
-        word_to_index, vocab_size, sequences = pickle.load(f)
-    print("Vocabulary and sequences loaded from vocab.pkl")
-    return word_to_index, vocab_size, sequences
-
-# Text Generation
-def generate_text(model, word_to_index, index_to_word, input_text, sequence_length, generate_length):
-    input_sequence = preprocess_text(input_text)
-    input_indices = [word_to_index.get(word, -1) for word in input_sequence]
-    input_indices = [index for index in input_indices if index != -1]
+    # Convert input_text to lowercase and split into words
+    input_text = input_text.lower()
     
-    if len(input_indices) < 1:
-        print("Input is too short for generating text or an unknown word.")
-        return ""
+    # Ensure all words in the input text are in the vocabulary
+    input_words = input_text.split()
+    input_state = []
+    for word in input_words[-sequence_length:]:
+        if word in env.word_to_index:
+            input_state.append(env.word_to_index[word])
+        else:
+            # If word is not in vocab, replace with an "unknown" token (optional)
+            input_state.append(env.word_to_index.get('<unk>', 0))  # Default to index 0 or <unk>
+    
+    # Convert to tensor
+    input_state = torch.tensor(input_state, dtype=torch.long).unsqueeze(0)  # Shape: (1, sequence_length)
 
-    input_tensor = torch.tensor(input_indices[len(input_indices)-1:], dtype=torch.long).unsqueeze(0)
+    generated_text = input_words
 
-    generated_text = []
-    for _ in range(generate_length):
+    for _ in range(max_length):
         with torch.no_grad():
-            output = model(input_tensor)
-            output_dist = output.data.div(temperature).exp()
-            predicted_index = torch.multinomial(output_dist, 1).item()
-            predicted_word = index_to_word[predicted_index]
-
+            output = agent(input_state)  # Shape: (1, vocab_size)
+            output_dist = torch.softmax(output, dim=-1)  # Apply softmax to get probabilities
+            predicted_index = torch.multinomial(output_dist, 1).item()  # Sample from the distribution
+            
+            predicted_word = env.index_to_word[predicted_index]
             generated_text.append(predicted_word)
-            input_tensor = torch.cat((input_tensor[0][len(input_indices)-1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
+
+            # Update input_state with the new word's index for next prediction
+            input_state = torch.cat((input_state[:, 1:], torch.tensor([[predicted_index]], dtype=torch.long)), dim=1)
 
     return ' '.join(generated_text)
 
-# Main Function
+# Main function to run the agent and the environment
 def main():
-    choice = input("Do you want to (1) train and save a new model or (2) load an existing model? (Enter 1 or 2): ")
+    # Define vocabulary (for simplicity, a small vocabulary)
+    with open(KBfilename, encoding="UTF-8") as f:
+        vocab = f.read().split()[:KB_MEM]       
+    # Initialize environment and agent
+    env = Environment(vocab)
+    agent = Agent(vocab_size=len(vocab), embedding_dim=128, hidden_dim=128, sequence_length=1)
+    choice = input("Do you want to (1) train and save a new agent or (2) load an existing agent? (Enter 1 or 2): ")
 
     if choice == '1':
-        with open("test.txt", encoding="UTF-8") as f:
-            text_data = f.read()
-        word_to_index, vocab_size = build_vocabulary(text_data)
-        sequences = create_sequences(word_to_index, preprocess_text(text_data), sequence_length=1)
-        dataset = TextDataset(sequences)
-        data_loader = DataLoader(dataset, batch_size=256, shuffle=True)
+        # Train the agent (for demonstration, we train for a small number of epochs)
+        train(agent, env, num_epochs=num_epochs, batch_size=512)
 
-        model = KnowledgeAugmentedLSTM(vocab_size)
-        train_model(model, data_loader)
-        save_vocab_and_sequences(word_to_index, vocab_size, sequences)
-    elif choice == '2':
-        word_to_index, vocab_size, sequences = load_vocab_and_sequences()
-        model = KnowledgeAugmentedLSTM(vocab_size)
-        model.load_state_dict(torch.load('knowledge_augmented_lstm.mdl', weights_only=True))
-        model.eval()
-    else:
-        print("Invalid choice. Exiting.")
-        return
-
-    index_to_word = {i: word for word, i in word_to_index.items()}
-
+        # Save the trained agent and its configuration
+        agent.save("agent_model.bin")
+    if choice == '2':
+        load_trained_agent("agent_model.bin")
+    # Test the agent by generating text
     while True:
         input_text = input("User: ")
-        print("AI:",generate_text(model, word_to_index, index_to_word, input_text, sequence_length=3, generate_length=generate_length))
-          
+        print(f"Generated Text: {generate_text(agent, env, input_text, sequence_length=1, max_length=150).lower()}")
+
+# Load the agent (for demonstration, loading from saved model)
+def load_trained_agent(filepath):
+    # Load the checkpoint with only the weights (no code execution risk)
+    checkpoint = torch.load(filepath, weights_only=True)
+    
+    # Create a new Agent model with the configuration from the checkpoint
+    agent = Agent(vocab_size=checkpoint['vocab_size'], 
+                  embedding_dim=checkpoint['embedding_dim'],
+                  hidden_dim=checkpoint['hidden_dim'],
+                  sequence_length=checkpoint['sequence_length'])
+    
+    # Load the state_dict (weights) into the agent model
+    agent.load_state_dict(checkpoint['state_dict'])  # Load only the model weights
+    
+    agent.eval()  # Set the model to evaluation mode after loading
+    print(f"Model loaded from {filepath}")
+    return agent
+
+# Run the main function
 if __name__ == "__main__":
     main()
+
