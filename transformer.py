@@ -18,7 +18,7 @@ temperature = 0.7
 # Preprocessing and Tokenization
 def preprocess_text(text):
     cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
-    tokens = cleaned_text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
+    tokens = text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
     return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
 
 def build_vocabulary(text_data):
@@ -84,45 +84,6 @@ class KnowledgeAugmentedLSTM(nn.Module):
         
         return output
 
-    # Generate text with uncertainty by sampling multiple times and calculating variance
-    def generate_with_uncertainty(self, model, word_to_index, index_to_word, input_text, sequence_length, generate_length, temperature=0.7, num_samples=5):
-        input_sequence = preprocess_text(input_text)
-        input_indices = [word_to_index.get(word, -1) for word in input_sequence]
-        input_indices = [index for index in input_indices if index != -1]
-        
-        if len(input_indices) < 1:
-            print("Input is too short for generating text or an unknown word.")
-            return ""
-
-        input_tensor = torch.tensor(input_indices[-1:], dtype=torch.long).unsqueeze(0)
-        generated_texts = []
-
-        # Perform multiple generations to estimate uncertainty
-        for _ in range(num_samples):
-            generated_text = []
-            for _ in range(generate_length):
-                with torch.no_grad():
-                    output = model(input_tensor, apply_dropout=True)  # Enable dropout during inference
-                    output_dist = output.data.div(temperature).exp()
-                    predicted_index = torch.multinomial(output_dist, 1).item()
-                    predicted_word = index_to_word[predicted_index]
-                    generated_text.append(predicted_word)
-                    input_tensor = torch.cat((input_tensor[0][-2:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
-            generated_texts.append(generated_text)
-
-        # Aggregate predictions (e.g., by choosing the most frequent words across the samples)
-        aggregated_text = self.aggregate_generated_texts(generated_texts)
-        return ' '.join(aggregated_text)
-
-    def aggregate_generated_texts(self, generated_texts):
-        # Combine multiple generated texts and select the most frequent word at each position
-        all_words = list(zip(*generated_texts))  # Transpose to get words at each position
-        aggregated_text = []
-        for words in all_words:
-            most_common_word = max(set(words), key=words.count)
-            aggregated_text.append(most_common_word)
-        return aggregated_text
-
 # Training Function
 def train_model(model, data_loader, num_epochs=num_epochs):
     criterion = nn.CrossEntropyLoss()
@@ -150,8 +111,8 @@ def train_model(model, data_loader, num_epochs=num_epochs):
             progress_bar.set_postfix(loss=total_loss / (len(progress_bar) + 1), 
                                       accuracy=(correct_predictions / total_predictions) * 100)
     
-    torch.save(model.state_dict(), 'knowledge_augmented_lstm_with_uncertainty.mdl')
-    print("Model saved to knowledge_augmented_lstm_with_uncertainty.mdl")
+    torch.save(model.state_dict(), 'knowledge_augmented_lstm.mdl')
+    print("Model saved to knowledge_augmented_lstm.mdl")
 
 # Save and Load Functions
 def save_vocab_and_sequences(word_to_index, vocab_size, sequences):
@@ -208,7 +169,7 @@ def main():
     elif choice == '2':
         word_to_index, vocab_size, sequences = load_vocab_and_sequences()
         model = KnowledgeAugmentedLSTM(vocab_size)
-        model.load_state_dict(torch.load('knowledge_augmented_lstm_with_uncertainty.mdl'))
+        model.load_state_dict(torch.load('knowledge_augmented_lstm.mdl'))
         model.eval()
     else:
         print("Invalid choice. Exiting.")
