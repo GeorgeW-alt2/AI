@@ -136,7 +136,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
         print("Input is too short for generating text or an unknown word.")
         return ""
 
-    input_tensor = torch.tensor(input_indices[-1:], dtype=torch.long).unsqueeze(0)
+    input_tensor = torch.tensor(input_indices[len(input_indices)-1:], dtype=torch.long).unsqueeze(0)
 
     generated_text = []
     for _ in range(generate_length):
@@ -147,7 +147,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
             predicted_word = index_to_word[predicted_index]
 
             generated_text.append(predicted_word)
-            input_tensor = torch.cat((input_tensor[0][-2:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
+            input_tensor = torch.cat((input_tensor[0][len(input_indices)-1:], torch.tensor([predicted_index])), dim=0).unsqueeze(0)
 
     return ' '.join(generated_text)
 
