@@ -11,7 +11,7 @@ from tqdm import tqdm
 # Constants
 KB_MEMORY_UNCOMPRESSED = 4000
 n = 4  # Use quadgrams for training
-num_epochs = 30
+num_epochs = 20
 generate_length = 140
 temperature = 0.7
 
@@ -169,7 +169,7 @@ def main():
     elif choice == '2':
         word_to_index, vocab_size, sequences = load_vocab_and_sequences()
         model = KnowledgeAugmentedLSTM(vocab_size)
-        model.load_state_dict(torch.load('knowledge_augmented_lstm.mdl'))
+        model.load_state_dict(torch.load('knowledge_augmented_lstm.mdl', weights_only=True))
         model.eval()
     else:
         print("Invalid choice. Exiting.")
