@@ -25,7 +25,7 @@ def build_vocabulary(text_data):
     tokens = preprocess_text(text_data)
     word_counts = {}
     for word in tokens:
-        word_counts[word] = word_counts.get(word, 0) + 1
+        word_counts[word] = word_counts.get(word, -1) + 1
     
     vocab = sorted(word_counts, key=word_counts.get, reverse=True)
     vocab_size = len(vocab)
@@ -136,7 +136,7 @@ def generate_text(model, word_to_index, index_to_word, input_text, sequence_leng
         print("Input is too short for generating text or an unknown word.")
         return ""
 
-    input_tensor = torch.tensor(input_indices[len(input_indices)-1:], dtype=torch.long).unsqueeze(0)
+    input_tensor = torch.tensor(input_indices[-len(input_indices)-1:], dtype=torch.long).unsqueeze(0)
 
     generated_text = []
     for _ in range(generate_length):
