@@ -101,7 +101,7 @@ def load_model_and_vocab(vocab_path='vocab.pkl', model_path='knowledge_augmented
         word_to_index = pickle.load(f)
     vocab_size = len(word_to_index)
     model = KnowledgeAugmentedLSTM(vocab_size)
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path, weights_only= True))
     model.eval()
     print("Model and vocabulary loaded.")
     return model, word_to_index
@@ -152,8 +152,8 @@ def main():
         return
 
     while True:
-        user_input = input("Enter seed text: ")
-        print("Generated Text:", generate_text(model, word_to_index, user_input, sequence_length=4, generate_length=generate_length, temperature=temperature))
+        user_input = input("User: ")
+        print("AI:", generate_text(model, word_to_index, user_input, sequence_length=4, generate_length=generate_length, temperature=temperature))
 
 if __name__ == "__main__":
     main()
