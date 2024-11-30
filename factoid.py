@@ -137,7 +137,7 @@ def generate_text(agent, env, input_text, sequence_length=3, max_length=50):
             generated_text.append(predicted_word)
 
             # Update input_state with the new word's index for next prediction
-            input_state = torch.cat((input_state[:, 1:], torch.tensor([[predicted_index]], dtype=torch.long)), dim=1)
+            input_state = torch.cat((input_state[-3:, 1:], torch.tensor([[predicted_index]], dtype=torch.long)), dim=1)
 
     return ' '.join(generated_text)
 
@@ -188,7 +188,7 @@ def main():
     # Test the agent by generating text
     while True:
         input_text = input("User: ")
-        print(f"Generated Text: {generate_text(agent, env, input_text, sequence_length=3, max_length=100)}")
+        print(f"Generated Text: {generate_text(agent, env, input_text, sequence_length=3, max_length=1000)}")
 
 
 if __name__ == "__main__":
