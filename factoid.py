@@ -73,8 +73,8 @@ def train(agent, env, num_epochs=100, batch_size=32, learning_rate=0.001):
             for i in range(len(env.vocab) - agent.sequence_length):
                 # Extract the trigram (2 input words, 1 target word)
                 input_sequence = env.vocab[i:i + agent.sequence_length]  # 2 words for input
-                target_word = env.vocab[i + agent.sequence_length]  # 3rd word as target
-                
+                random_start = random.randint(0, len(env.vocab) - agent.sequence_length - 1)
+                target_word = env.vocab[random_start + agent.sequence_length]                
                 input_state = torch.tensor([env.word_to_index[word] for word in input_sequence], dtype=torch.long).unsqueeze(0)  # Shape: (1, sequence_length)
                 
                 # Forward pass
