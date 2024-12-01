@@ -380,7 +380,7 @@ void activity()
 
     // Create vocabulary from text file
     std::unordered_map<int, std::string> vocab = create_vocabulary(filename);
-    int vocab_size = vocab.size()/7;
+    int vocab_size = vocab.size();
     int inputSize = vocab_size;
     int hiddenSize = 100;
     int outputSize = vocab_size;
