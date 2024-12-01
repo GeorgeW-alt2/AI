@@ -1,5 +1,5 @@
 # depslib dependency file v1.0
-1733029573 source:c:\users\george1\desktop\ai\main.cpp
+1733086769 source:c:\users\george1\desktop\ai\main.cpp
 	<cmath>
 	<iostream>
 	<fstream>
@@ -12,28 +12,4 @@
 	<cassert>
 	<random>
 	<string>
-
-1733048710 source:c:\users\george\downloads\ai-main\ai-main\main.cpp
-	<cmath>
-	<iostream>
-	<fstream>
-	<vector>
-	<unordered_map>
-	<sstream>
-	<cstdlib>
-	<ctime>
-	<algorithm>
-	<cassert>
-	<random>
-	<string>
-	<iostream>
-	<unordered_map>
-	<vector>
-	<string>
-	<algorithm>
-	<ctime>
-	<cstdlib>
-	<cmath>
-	<sstream>
-	<fstream>
 

@@ -13,8 +13,8 @@
 
 using namespace std;
 
-int KB_LIMIT = 1000;
-
+int KB_LIMIT = 500;
+int GEN_LEN = 140;
 // Sigmoid activation function
 double sigmoid(double x)
 {
@@ -238,6 +238,9 @@ unordered_map<int, string> create_vocabulary(const string& filename)
             word_to_index[word] = index;
             vocab[index] = word;
             index++;
+            if (index >= KB_LIMIT){
+            break;
+            }
         }
     }
 
@@ -259,36 +262,87 @@ string index_to_word(int index, const unordered_map<int, string>& vocab)
     }
 }
 
+
+// Function to apply temperature scaling to probabilities
+std::vector<double> apply_temperature(const std::vector<double>& logits, double temperature)
+{
+    std::vector<double> scaled_probs(logits.size());
+    double sum = 0.0;
+
+    for (size_t i = 0; i < logits.size(); ++i)
+    {
+        scaled_probs[i] = exp(logits[i] / temperature);
+        sum += scaled_probs[i];
+    }
+
+    for (size_t i = 0; i < scaled_probs.size(); ++i)
+    {
+        scaled_probs[i] /= sum;
+    }
+
+    return scaled_probs;
+}
+
+// Function to sample a word index from the probability distribution
+int sample_from_distribution(const std::vector<double>& probabilities)
+{
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::discrete_distribution<> dist(probabilities.begin(), probabilities.end());
+    return dist(gen);
+}
+
+// Updated function to prepare input sequences
+vector<vector<double>> prepare_sequences(const vector<string>& words, int sequence_length, const unordered_map<string, int>& word_to_index, int vocab_size)
+{
+    vector<vector<double>> sequences;
+    for (size_t i = 0; i < words.size() - sequence_length; ++i)
+    {
+        vector<double> sequence(vocab_size * sequence_length, 0.0);
+        for (int j = 0; j < sequence_length; ++j)
+        {
+            if (word_to_index.find(words[i + j]) != word_to_index.end())
+            {
+                sequence[word_to_index.at(words[i + j]) + j * vocab_size] = 1.0;
+            }
+        }
+        sequences.push_back(sequence);
+    }
+    return sequences;
+}
+
+// Update main function to handle word sequences
 int main()
 {
+    const int sequence_length = 3; // Number of words in each sequence
     double learningRate = 0.01;
-    std::string filename = "test.txt"; // Replace with your actual file path
+    string filename = "test.txt"; // Replace with your actual file path
 
     // Create vocabulary from text file
-    std::unordered_map<int, std::string> vocab = create_vocabulary(filename);
+    unordered_map<int, string> vocab = create_vocabulary(filename);
     int vocab_size = vocab.size();
-    int inputSize = vocab_size;
-    int hiddenSize = 100;
-    int outputSize = vocab_size;
+    int input_size = vocab_size * sequence_length;
+    int hidden_size = 50;
+    int output_size = vocab_size;
 
     // Create reverse mapping for vocabulary
-    std::unordered_map<std::string, int> word_to_index;
+    unordered_map<string, int> word_to_index;
     for (const auto& pair : vocab)
     {
         word_to_index[pair.second] = pair.first;
     }
 
     // Prepare inputs and targets for training
-    std::vector<std::vector<double>> inputs, targets;
+    vector<vector<double>> inputs, targets;
 
-    std::ifstream file(filename);
-    std::string line;
-    std::vector<std::string> words;
+    ifstream file(filename);
+    string word;
+    vector<string> words;
     int line_count = 0;
 
-    while (file >> line)
+    while (file >> word)
     {
-        words.push_back(line);
+        words.push_back(word);
         if (line_count >= KB_LIMIT)
         {
             break;
@@ -296,56 +350,77 @@ int main()
         line_count++;
     }
 
-    for (size_t i = 0; i < words.size() - 1; ++i)
+    inputs = prepare_sequences(words, sequence_length, word_to_index, vocab_size);
+
+    for (size_t i = sequence_length; i < words.size(); ++i)
     {
-        std::vector<double> input(vocab_size, 0.0);
-        std::vector<double> target(vocab_size, 0.0);
-        input[word_to_index[words[i]]] = 1.0;
-        target[word_to_index[words[i + 1]]] = 1.0;
-        inputs.push_back(input);
+        vector<double> target(vocab_size, 0.0);
+        if (word_to_index.find(words[i]) != word_to_index.end())
+        {
+            target[word_to_index.at(words[i])] = 1.0;
+        }
         targets.push_back(target);
     }
 
-    NeuralNetwork model(inputSize, hiddenSize, outputSize);
+    NeuralNetwork model(input_size, hidden_size, output_size);
 
     // Train the network
-    model.train(inputs, targets, 3, learningRate);
+    model.train(inputs, targets, 2, learningRate);
 
-    // User input loop for word prediction
-    std::cout << "Enter a word to predict the next word (or type 'exit' to quit): " << std::endl;
-    std::string user_input;
+    cout << "Enter a sequence of " << sequence_length << " words to predict the next word (or type 'exit' to quit): " << endl;
+
+    string user_input;
+    double temperature = 0.7; // Adjust temperature to control randomness
     while (true)
     {
-        std::getline(std::cin, user_input);
+        getline(cin, user_input);
 
         if (user_input == "exit") // Allow user to exit
             break;
 
-        if (word_to_index.find(user_input) != word_to_index.end())
+        // Split the input into words
+        vector<string> input_words = split(user_input, ' ');
+
+
+
+        // Prepare input sequence for prediction
+        vector<double> input(input_size, 0.0);
+        for (int i = 0; i < sequence_length; ++i)
         {
-            // Prepare input vector for prediction
-            for (int i = 0; i < 5; i++)
+            if (word_to_index.find(input_words[i]) != word_to_index.end())
             {
-                std::vector<double> input(vocab_size, 0.0);
-                input[word_to_index[user_input]] = 1.0;
-
-                // Get the model's prediction
-                std::vector<double> output = model.feedforward(input);
-
-                // Find the word with the highest probability (index)
-                int predicted_index = std::distance(output.begin(), std::max_element(output.begin(), output.end()));
-                std::string word = index_to_word(predicted_index, vocab);
-                std::cout << word << " ";
-                user_input += word + " ";
+                input[word_to_index.at(input_words[i]) + i * vocab_size] = 1.0;
+            }
+            else
+            {
+                cout << "Word not found in vocabulary: " << input_words[i] << endl;
+                break;
             }
         }
-        else
+
+        for (int i = 0; i < GEN_LEN; i++)
         {
-            std::cout << "Word not found in vocabulary. Try again." << std::endl;
+            // Get the model's prediction
+            vector<double> output = model.feedforward(input);
+
+            // Apply temperature scaling
+            vector<double> probabilities = apply_temperature(output, temperature);
+
+            // Sample the next word
+            int predicted_index = sample_from_distribution(probabilities);
+            string word = index_to_word(predicted_index, vocab);
+
+            cout << word << " ";
+
+            // Shift the sequence and add the predicted word
+            input.erase(input.begin(), input.begin() + vocab_size);
+            input.insert(input.end(), vocab_size, 0.0);
+            input[predicted_index + (sequence_length - 1) * vocab_size] = 1.0;
         }
+        cout << endl;
 
-    std::cout << "Enter another word or type 'exit' to quit: ";
-}
+        cout << "Enter another sequence or type 'exit' to quit: ";
+    }
 
-return 0;
+    return 0;
 }
