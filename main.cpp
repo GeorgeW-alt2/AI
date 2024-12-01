@@ -262,8 +262,21 @@ std::string index_to_word(int index, const std::unordered_map<int, std::string>&
     }
 }
 
+#include <iostream>
+#include <unordered_map>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <ctime>
+#include <cstdlib>
+#include <cmath>
+#include <sstream>
+#include <fstream>
 
-int main() {
+// Your Neural Network class and other functions will remain the same
+
+int main()
+{
     double learningRate = 0.01;
     std::string filename = "test.txt"; // Replace with your actual file path
 
@@ -276,54 +289,72 @@ int main() {
 
     // Create reverse mapping for vocabulary
     std::unordered_map<std::string, int> word_to_index;
-    for (const auto& pair : vocab) {
+    for (const auto& pair : vocab)
+    {
         word_to_index[pair.second] = pair.first;
     }
 
     // Prepare inputs and targets for training
     std::vector<std::vector<double>> inputs, targets;
+
     std::ifstream file(filename);
     std::string line;
     std::vector<std::string> words;
     int line_count = 0;
 
-    while (file >> line) {
+    while (file >> line)
+    {
         words.push_back(line);
-        if (line_count >= KB_LIMIT) {
+        if (line_count >= KB_LIMIT)
+        {
             break;
         }
+        line_count++;
     }
 
-    // Prepare training data
-    for (int i = 0; i < words.size() - 1; ++i) {
-        std::vector<double> input(inputSize, 0.0);
-        std::vector<double> target(outputSize, 0.0);
-
+    for (size_t i = 0; i < words.size() - 1; ++i)
+    {
+        std::vector<double> input(vocab_size, 0.0);
+        std::vector<double> target(vocab_size, 0.0);
         input[word_to_index[words[i]]] = 1.0;
         target[word_to_index[words[i + 1]]] = 1.0;
-
         inputs.push_back(input);
         targets.push_back(target);
     }
 
-    // Train the model
-    NeuralNetwork nn(inputSize, hiddenSize, outputSize);
-    nn.train(inputs, targets, 100, learningRate);
+    NeuralNetwork model(inputSize, hiddenSize, outputSize);
 
-    // Generate new text based on trained model
-    string generated_text = "Start";
-    vector<double> input(inputSize, 0.0);
-    input[word_to_index["Start"]] = 1.0; // Starting word for generation
+    // Train the network
+    model.train(inputs, targets, 3, learningRate);
 
-    for (int i = 0; i < 10; ++i) {
-        vector<double> output = nn.feedforward(input);
-        int predicted_word_index = max_element(output.begin(), output.end()) - output.begin();
-        generated_text += " " + index_to_word(predicted_word_index, vocab);
-        fill(input.begin(), input.end(), 0.0);  // Reset input vector
-        input[predicted_word_index] = 1.0;  // Set input to the predicted word
+    // User input loop for word prediction
+    std::cout << "Enter a word to predict the next word (or type 'exit' to quit): " << std::endl;
+    std::string user_input;
+    while (true)
+    {
+        std::getline(std::cin, user_input);
+
+        if (user_input == "exit") // Allow user to exit
+            break;
+
+        if (word_to_index.find(user_input) != word_to_index.end()) {
+            // Prepare input vector for prediction
+            std::vector<double> input(vocab_size, 0.0);
+            input[word_to_index[user_input]] = 1.0;
+
+            // Get the model's prediction
+            std::vector<double> output = model.feedforward(input);
+
+            // Find the word with the highest probability (index)
+            int predicted_index = std::distance(output.begin(), std::max_element(output.begin(), output.end()));
+            std::cout << "Input Word: " << user_input
+                      << " -> Predicted next word: " << index_to_word(predicted_index, vocab) << std::endl;
+        } else {
+            std::cout << "Word not found in vocabulary. Try again." << std::endl;
+        }
+
+        std::cout << "Enter another word or type 'exit' to quit: ";
     }
-
-    cout << "Generated Text: " << generated_text << endl;
 
     return 0;
 }
