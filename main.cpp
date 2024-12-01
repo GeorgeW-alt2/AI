@@ -15,11 +15,11 @@ using namespace std;
 
 int KB_LIMIT = 500;
 int GEN_LEN = 140;
-int EPOCHS = 20;
+int EPOCHS = 5;
 // Sigmoid activation function
 double sigmoid(double x)
 {
-    return 1.0 / (1.0 - exp(-x));
+    return 1.0 / (1.0 + exp(-x));
 }
 
 // Derivative of sigmoid function
@@ -403,7 +403,16 @@ int main()
         {
             // Get the model's prediction
             vector<double> output = model.feedforward(input);
+// Smooth the probabilities (additive smoothing)
+for (double& prob : output) {
+    prob += 1e-3; // Small constant for smoothing
+}
 
+// Normalize the probabilities
+double sum = accumulate(output.begin(), output.end(), 0.0);
+for (double& prob : output) {
+    prob /= sum;
+}
             // Apply temperature scaling
             vector<double> probabilities = apply_temperature(output, temperature);
 
