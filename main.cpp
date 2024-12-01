@@ -15,10 +15,11 @@ using namespace std;
 
 int KB_LIMIT = 500;
 int GEN_LEN = 140;
+int EPOCHS = 20;
 // Sigmoid activation function
 double sigmoid(double x)
 {
-    return 1.0 / (1.0 + exp(-x));
+    return 1.0 / (1.0 - exp(-x));
 }
 
 // Derivative of sigmoid function
@@ -365,7 +366,7 @@ int main()
     NeuralNetwork model(input_size, hidden_size, output_size);
 
     // Train the network
-    model.train(inputs, targets, 2, learningRate);
+    model.train(inputs, targets, EPOCHS, learningRate);
 
     cout << "Enter a sequence of " << sequence_length << " words to predict the next word (or type 'exit' to quit): " << endl;
 
