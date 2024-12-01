@@ -289,12 +289,14 @@ void NeuralNetwork::printWeights()
     }
 }
 // Function to split a string by a delimiter
-std::vector<std::string> split(const std::string& str, char delimiter) {
+std::vector<std::string> split(const std::string& str, char delimiter)
+{
     std::vector<std::string> tokens;
     std::stringstream ss(str);
     std::string token;
 
-    while (std::getline(ss, token, delimiter)) {
+    while (std::getline(ss, token, delimiter))
+    {
         tokens.push_back(token);
     }
 
@@ -345,33 +347,46 @@ std::string index_to_word(int index, const std::unordered_map<int, std::string>&
 std::vector<int> generate_sequence(const std::vector<int>& seed, int sequenceLength, NeuralNetwork& model, const std::unordered_map<int, std::string>& vocab)
 {
     std::vector<int> sequence = seed;  // Start with the seed input
-    for (int i = 0; i < 1; ++i)
+    for (int i = 0; i < sequenceLength; ++i)
     {
-        std::vector<int> input = { sequence[sequence.size() - 1]}; // Use the last 3 words
+        std::vector<int> input = { sequence[sequence.size() - 1]};  // Use the last word in the sequence
         std::vector<int> predicted = model.predict(input);
 
         // Find the index of the highest probability
         int predictedIndex = std::max_element(predicted.begin(), predicted.end()) - predicted.begin();
-        sequence.push_back(predictedIndex); // Append predicted word to the sequence
+        sequence.push_back(predictedIndex);  // Add the predicted word to the sequence
     }
+
+    // Convert the indices in the sequence to words
+    std::vector<std::string> generatedWords;
+    for (int index : sequence)
+    {
+        generatedWords.push_back(index_to_word(index, vocab));  // Map each index to the corresponding word
+    }
+
+    // Print the generated sequence
+    for (const std::string& word : generatedWords)
+    {
+        std::cout << word << " ";
+    }
+    std::cout << std::endl;
 
     return sequence;
 }
 
-void print_generated_sequence(const std::vector<int>& sequence, const std::unordered_map<int, std::string>& vocab)
+
+std::string print_generated_sequence(const std::vector<int>& sequence, const std::unordered_map<int, std::string>& vocab)
 {
     if (!sequence.empty())
     {
         int last_idx = sequence.back(); // Get the last index
-        std::cout << "AI: " << index_to_word(last_idx, vocab) << std::endl; // Print only the last word
+
+        return index_to_word(last_idx, vocab);
     }
-    else
-    {
-        std::cout << "No prediction available." << std::endl; // Handle empty sequence case
-    }
+    return "";
 }
 
-void activity()
+std::string activity(std::string& input)
 {
 
 
@@ -394,17 +409,14 @@ void activity()
     NeuralNetwork model(inputSize, hiddenSize, outputSize, learningRate);
     while(true)
     {
-        // Take the user input as a string
-        std::string input;
-        std::cout << "User: ";
-        std::getline(std::cin, input);
+
         char delimiter = ' ';
 
         std::vector<std::string> words = split(input, delimiter);
+        if (words.size() < 2)
+        {
 
-        if (words.size() < 2){
-
-            return;
+            return "";
         }
         // Split the input into words
         std::istringstream iss(input);
@@ -421,24 +433,27 @@ void activity()
             }
             else
             {
-                std::cout << "Word '" << word << "' not found in the vocabulary.\n";
-                return;
+                return word + "' not found in the vocabulary.\n";
             }
         }
         // Generate text with the model
-        int sequenceLength = 3;
+        int sequenceLength = 50;
 
         std::vector<int> generated_sequence = generate_sequence(seed, sequenceLength, model, vocab);
-
-        print_generated_sequence(generated_sequence, vocab);
+        return print_generated_sequence(generated_sequence, vocab);
     }
+
 }
 
 int main()
 {
-    while(true)
-    {
-        activity();
+    while(true){
+
+    // Take the user input as a string
+    std::string input;
+    std::cout << "User: ";
+    std::getline(std::cin, input);
+    std::cout << activity(input) << std::endl;
     }
     return 0;
 }
