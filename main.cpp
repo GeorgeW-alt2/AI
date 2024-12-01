@@ -12,7 +12,7 @@
 #include <string>
 
 using namespace std;
-int KB_LIMIT = 10;
+int KB_LIMIT = 100;
 // Sigmoid activation function
 double sigmoid(double x)
 {
@@ -110,56 +110,52 @@ public:
     }
 
     // Training using backpropagation
-    void train(vector<vector<double>> inputs, vector<vector<double>> targets, int epochs, double learning_rate)
+    void train(const vector<vector<double>>& inputs, const vector<vector<double>>& targets, int epochs, double learning_rate)
     {
+        vector<double> hidden_output(hidden_size);
+        vector<double> output(output_size);
+        vector<double> output_error(output_size);
+        vector<double> output_delta(output_size);
+        vector<double> hidden_error(hidden_size);
+        vector<double> hidden_delta(hidden_size);
+
         for (int epoch = 0; epoch < epochs; ++epoch)
         {
+            double loss = 0;
             for (size_t i = 0; i < inputs.size(); ++i)
             {
-                vector<double> input = inputs[i];
-                vector<double> target = targets[i];
+                const vector<double>& input = inputs[i];
+                const vector<double>& target = targets[i];
 
                 // Feedforward
-                vector<double> hidden_output(hidden_size);
                 for (int h = 0; h < hidden_size; ++h)
                 {
-                    hidden_output[h] = 0;
+                    hidden_output[h] = bias_hidden[h];
                     for (int j = 0; j < input_size; ++j)
                     {
                         hidden_output[h] += input[j] * weights_input_hidden[j][h];
                     }
-                    hidden_output[h] += bias_hidden[h];
                     hidden_output[h] = sigmoid(hidden_output[h]);
                 }
 
-                vector<double> output(output_size);
                 for (int o = 0; o < output_size; ++o)
                 {
-                    output[o] = 0;
+                    output[o] = bias_output[o];
                     for (int h = 0; h < hidden_size; ++h)
                     {
                         output[o] += hidden_output[h] * weights_hidden_output[h][o];
                     }
-                    output[o] += bias_output[o];
                     output[o] = sigmoid(output[o]);
                 }
 
-                // Calculate output error
-                vector<double> output_error(output_size);
+                // Calculate error and delta for output layer
                 for (int o = 0; o < output_size; ++o)
                 {
                     output_error[o] = target[o] - output[o];
-                }
-
-                // Backpropagate errors to output layer
-                vector<double> output_delta(output_size);
-                for (int o = 0; o < output_size; ++o)
-                {
                     output_delta[o] = output_error[o] * sigmoid_derivative(output[o]);
                 }
 
                 // Backpropagate to hidden layer
-                vector<double> hidden_error(hidden_size);
                 for (int h = 0; h < hidden_size; ++h)
                 {
                     hidden_error[h] = 0;
@@ -167,7 +163,7 @@ public:
                     {
                         hidden_error[h] += output_delta[o] * weights_hidden_output[h][o];
                     }
-                    hidden_error[h] *= sigmoid_derivative(hidden_output[h]);
+                    hidden_delta[h] = hidden_error[h] * sigmoid_derivative(hidden_output[h]);
                 }
 
                 // Update weights and biases
@@ -184,21 +180,19 @@ public:
                 {
                     for (int i = 0; i < input_size; ++i)
                     {
-                        weights_input_hidden[i][h] += learning_rate * hidden_error[h] * input[i];
+                        weights_input_hidden[i][h] += learning_rate * hidden_delta[h] * input[i];
                     }
-                    bias_hidden[h] += learning_rate * hidden_error[h];
+                    bias_hidden[h] += learning_rate * hidden_delta[h];
+                }
+
+                // Calculate loss for this training step
+                for (int o = 0; o < output_size; ++o)
+                {
+                    loss += pow(target[o] - output[o], 2);
                 }
             }
 
-            double loss = 0;
-            for (size_t i = 0; i < inputs.size(); ++i)
-            {
-                vector<double> output = feedforward(inputs[i]);
-                for (int j = 0; j < output_size; ++j)
-                {
-                    loss += pow(targets[i][j] - output[j], 2);
-                }
-            }
+            // Output loss for this epoch
             cout << "Epoch " << epoch << ", Loss: " << loss / inputs.size() << endl;
         }
     }
@@ -262,19 +256,6 @@ std::string index_to_word(int index, const std::unordered_map<int, std::string>&
     }
 }
 
-#include <iostream>
-#include <unordered_map>
-#include <vector>
-#include <string>
-#include <algorithm>
-#include <ctime>
-#include <cstdlib>
-#include <cmath>
-#include <sstream>
-#include <fstream>
-
-// Your Neural Network class and other functions will remain the same
-
 int main()
 {
     double learningRate = 0.01;
@@ -337,24 +318,31 @@ int main()
         if (user_input == "exit") // Allow user to exit
             break;
 
-        if (word_to_index.find(user_input) != word_to_index.end()) {
+        if (word_to_index.find(user_input) != word_to_index.end())
+        {
             // Prepare input vector for prediction
-            std::vector<double> input(vocab_size, 0.0);
-            input[word_to_index[user_input]] = 1.0;
+            for (int i = 0; i < 5; i++)
+            {
+                std::vector<double> input(vocab_size, 0.0);
+                input[word_to_index[user_input]] = 1.0;
 
-            // Get the model's prediction
-            std::vector<double> output = model.feedforward(input);
+                // Get the model's prediction
+                std::vector<double> output = model.feedforward(input);
 
-            // Find the word with the highest probability (index)
-            int predicted_index = std::distance(output.begin(), std::max_element(output.begin(), output.end()));
-            std::cout << "Input Word: " << user_input
-                      << " -> Predicted next word: " << index_to_word(predicted_index, vocab) << std::endl;
-        } else {
+                // Find the word with the highest probability (index)
+                int predicted_index = std::distance(output.begin(), std::max_element(output.begin(), output.end()));
+                std::string word = index_to_word(predicted_index, vocab);
+                std::cout << word << " ";
+                user_input += word + " ";
+            }
+        }
+        else
+        {
             std::cout << "Word not found in vocabulary. Try again." << std::endl;
         }
 
-        std::cout << "Enter another word or type 'exit' to quit: ";
-    }
+    std::cout << "Enter another word or type 'exit' to quit: ";
+}
 
-    return 0;
+return 0;
 }
