@@ -11,283 +11,199 @@
 #include <random>
 #include <string>
 
-// Helper functions
-double randomWeight()
-{
-    return (rand() % 1000) / 1000.0 - 0.5;
-}
-
+using namespace std;
+int KB_LIMIT = 10;
 // Sigmoid activation function
 double sigmoid(double x)
 {
     return 1.0 / (1.0 + exp(-x));
 }
 
-// Sigmoid derivative for backpropagation
-double sigmoidDerivative(double x)
+// Derivative of sigmoid function
+double sigmoid_derivative(double x)
 {
-    return x * (1 - x);
+    return x * (1.0 - x);
 }
 
-// Hyperbolic tangent activation function
-double tanhActivation(double x)
-{
-    return tanh(x);
-}
-
-// Derivative of tanh activation
-double tanhDerivative(double x)
-{
-    return 1.0 - x * x;
-}
-
-// Softmax activation
-std::vector<double> softmax(const std::vector<double>& input)
-{
-    std::vector<double> output(input.size());
-    double sum_exp = 0.0;
-
-    // Compute exp of each input
-    for (double val : input)
-    {
-        sum_exp += exp(val/ 0.7);
-    }
-
-    // Normalize by sum_exp
-    for (size_t i = 0; i < input.size(); ++i)
-    {
-        output[i] = exp(input[i]) / sum_exp;
-    }
-
-    return output;
-}
-
-// A class for a simple RNN-based text generation model
+// Neural Network Class
 class NeuralNetwork
 {
 public:
-    NeuralNetwork(int inputSize, int hiddenSize, int outputSize, double learningRate);
-    void train(const std::vector<std::vector<int>>& inputs, const std::vector<std::vector<int>>& targets, int epochs, double learningRate);
-    std::vector<int> predict(const std::vector<int>& input);
-    void printWeights();
+    // Number of nodes in each layer
+    int input_size, hidden_size, output_size;
 
-private:
-    int inputSize;
-    int hiddenSize;
-    int outputSize;
+    // Weights and biases
+    vector<vector<double>> weights_input_hidden, weights_hidden_output;
+    vector<double> bias_hidden, bias_output;
 
-    std::vector<std::vector<double>> weightsInputHidden;
-    std::vector<std::vector<double>> weightsHiddenOutput;
-    std::vector<double> biasHidden;
-    std::vector<double> biasOutput;
+    // Constructor to initialize the network
+    NeuralNetwork(int input, int hidden, int output)
+    {
+        input_size = input;
+        hidden_size = hidden;
+        output_size = output;
 
-    double learningRate;
+        srand(time(0));
 
-    // Forward pass
-    std::vector<double> forward(const std::vector<int>& input);
-    // Backward pass with Adam optimizer
-    void backpropagate(const std::vector<int>& input, const std::vector<int>& target);
+        // Random initialization of weights and biases
+        weights_input_hidden = random_matrix(input_size, hidden_size);
+        weights_hidden_output = random_matrix(hidden_size, output_size);
+        bias_hidden = random_vector(hidden_size);
+        bias_output = random_vector(output_size);
+    }
 
-    // Adam optimizer helper variables
-    std::vector<std::vector<double>> mWeightsInputHidden;
-    std::vector<std::vector<double>> vWeightsInputHidden;
-    std::vector<std::vector<double>> mWeightsHiddenOutput;
-    std::vector<std::vector<double>> vWeightsHiddenOutput;
-    std::vector<double> mBiasHidden;
-    std::vector<double> vBiasHidden;
-    std::vector<double> mBiasOutput;
-    std::vector<double> vBiasOutput;
+    // Random matrix initialization
+    vector<vector<double>> random_matrix(int rows, int cols)
+    {
+        vector<vector<double>> matrix(rows, vector<double>(cols));
+        for (int i = 0; i < rows; ++i)
+        {
+            for (int j = 0; j < cols; ++j)
+            {
+                matrix[i][j] = (rand() % 1000) / 1000.0 - 0.5; // Random values between -0.5 and 0.5
+            }
+        }
+        return matrix;
+    }
+
+    // Random vector initialization
+    vector<double> random_vector(int size)
+    {
+        vector<double> vec(size);
+        for (int i = 0; i < size; ++i)
+        {
+            vec[i] = (rand() % 1000) / 1000.0 - 0.5;
+        }
+        return vec;
+    }
+
+    // Feedforward function to calculate the output
+    vector<double> feedforward(vector<double> inputs)
+    {
+        // Hidden layer
+        vector<double> hidden_output(hidden_size);
+        for (int i = 0; i < hidden_size; ++i)
+        {
+            hidden_output[i] = 0;
+            for (int j = 0; j < input_size; ++j)
+            {
+                hidden_output[i] += inputs[j] * weights_input_hidden[j][i];
+            }
+            hidden_output[i] += bias_hidden[i];
+            hidden_output[i] = sigmoid(hidden_output[i]);
+        }
+
+        // Output layer
+        vector<double> final_output(output_size);
+        for (int i = 0; i < output_size; ++i)
+        {
+            final_output[i] = 0;
+            for (int j = 0; j < hidden_size; ++j)
+            {
+                final_output[i] += hidden_output[j] * weights_hidden_output[j][i];
+            }
+            final_output[i] += bias_output[i];
+            final_output[i] = sigmoid(final_output[i]);
+        }
+
+        return final_output;
+    }
+
+    // Training using backpropagation
+    void train(vector<vector<double>> inputs, vector<vector<double>> targets, int epochs, double learning_rate)
+    {
+        for (int epoch = 0; epoch < epochs; ++epoch)
+        {
+            for (size_t i = 0; i < inputs.size(); ++i)
+            {
+                vector<double> input = inputs[i];
+                vector<double> target = targets[i];
+
+                // Feedforward
+                vector<double> hidden_output(hidden_size);
+                for (int h = 0; h < hidden_size; ++h)
+                {
+                    hidden_output[h] = 0;
+                    for (int j = 0; j < input_size; ++j)
+                    {
+                        hidden_output[h] += input[j] * weights_input_hidden[j][h];
+                    }
+                    hidden_output[h] += bias_hidden[h];
+                    hidden_output[h] = sigmoid(hidden_output[h]);
+                }
+
+                vector<double> output(output_size);
+                for (int o = 0; o < output_size; ++o)
+                {
+                    output[o] = 0;
+                    for (int h = 0; h < hidden_size; ++h)
+                    {
+                        output[o] += hidden_output[h] * weights_hidden_output[h][o];
+                    }
+                    output[o] += bias_output[o];
+                    output[o] = sigmoid(output[o]);
+                }
+
+                // Calculate output error
+                vector<double> output_error(output_size);
+                for (int o = 0; o < output_size; ++o)
+                {
+                    output_error[o] = target[o] - output[o];
+                }
+
+                // Backpropagate errors to output layer
+                vector<double> output_delta(output_size);
+                for (int o = 0; o < output_size; ++o)
+                {
+                    output_delta[o] = output_error[o] * sigmoid_derivative(output[o]);
+                }
+
+                // Backpropagate to hidden layer
+                vector<double> hidden_error(hidden_size);
+                for (int h = 0; h < hidden_size; ++h)
+                {
+                    hidden_error[h] = 0;
+                    for (int o = 0; o < output_size; ++o)
+                    {
+                        hidden_error[h] += output_delta[o] * weights_hidden_output[h][o];
+                    }
+                    hidden_error[h] *= sigmoid_derivative(hidden_output[h]);
+                }
+
+                // Update weights and biases
+                for (int o = 0; o < output_size; ++o)
+                {
+                    for (int h = 0; h < hidden_size; ++h)
+                    {
+                        weights_hidden_output[h][o] += learning_rate * output_delta[o] * hidden_output[h];
+                    }
+                    bias_output[o] += learning_rate * output_delta[o];
+                }
+
+                for (int h = 0; h < hidden_size; ++h)
+                {
+                    for (int i = 0; i < input_size; ++i)
+                    {
+                        weights_input_hidden[i][h] += learning_rate * hidden_error[h] * input[i];
+                    }
+                    bias_hidden[h] += learning_rate * hidden_error[h];
+                }
+            }
+
+            double loss = 0;
+            for (size_t i = 0; i < inputs.size(); ++i)
+            {
+                vector<double> output = feedforward(inputs[i]);
+                for (int j = 0; j < output_size; ++j)
+                {
+                    loss += pow(targets[i][j] - output[j], 2);
+                }
+            }
+            cout << "Epoch " << epoch << ", Loss: " << loss / inputs.size() << endl;
+        }
+    }
 };
 
-// Constructor to initialize network weights and biases
-NeuralNetwork::NeuralNetwork(int inputSize, int hiddenSize, int outputSize, double learningRate)
-    : inputSize(inputSize), hiddenSize(hiddenSize), outputSize(outputSize), learningRate(learningRate)
-{
-    // Initialize random weights and biases
-    weightsInputHidden.resize(inputSize, std::vector<double>(hiddenSize));
-    weightsHiddenOutput.resize(hiddenSize, std::vector<double>(outputSize));
-    biasHidden.resize(hiddenSize);
-    biasOutput.resize(outputSize);
-
-    srand(time(0)); // Seed for random number generation
-    for (int i = 0; i < inputSize; ++i)
-    {
-        for (int j = 0; j < hiddenSize; ++j)
-        {
-            weightsInputHidden[i][j] = randomWeight();
-        }
-    }
-
-    for (int i = 0; i < hiddenSize; ++i)
-    {
-        for (int j = 0; j < outputSize; ++j)
-        {
-            weightsHiddenOutput[i][j] = randomWeight();
-        }
-    }
-
-    for (int i = 0; i < hiddenSize; ++i)
-    {
-        biasHidden[i] = randomWeight();
-    }
-
-    for (int i = 0; i < outputSize; ++i)
-    {
-        biasOutput[i] = randomWeight();
-    }
-
-    // Initialize Adam optimizer variables
-    mWeightsInputHidden.resize(inputSize, std::vector<double>(hiddenSize, 0));
-    vWeightsInputHidden.resize(inputSize, std::vector<double>(hiddenSize, 0));
-    mWeightsHiddenOutput.resize(hiddenSize, std::vector<double>(outputSize, 0));
-    vWeightsHiddenOutput.resize(hiddenSize, std::vector<double>(outputSize, 0));
-    mBiasHidden.resize(hiddenSize, 0);
-    vBiasHidden.resize(hiddenSize, 0);
-    mBiasOutput.resize(outputSize, 0);
-    vBiasOutput.resize(outputSize, 0);
-}
-
-// Forward pass to calculate predictions
-std::vector<double> NeuralNetwork::forward(const std::vector<int>& input)
-{
-    // Input to hidden layer
-    std::vector<double> hidden(hiddenSize, 0.0);
-    for (int i = 0; i < inputSize; ++i)
-    {
-        for (int j = 0; j < hiddenSize; ++j)
-        {
-            hidden[j] += input[i] * weightsInputHidden[i][j];
-        }
-    }
-
-    // Add bias and apply tanh activation
-    for (int i = 0; i < hiddenSize; ++i)
-    {
-        hidden[i] = tanhActivation(hidden[i] + biasHidden[i]);
-    }
-
-    // Hidden to output layer
-    std::vector<double> output(outputSize, 0.0);
-    for (int i = 0; i < hiddenSize; ++i)
-    {
-        for (int j = 0; j < outputSize; ++j)
-        {
-            output[j] += hidden[i] * weightsHiddenOutput[i][j];
-        }
-    }
-
-    // Add bias and apply softmax activation
-    for (int i = 0; i < outputSize; ++i)
-    {
-        output[i] = output[i] + biasOutput[i];
-    }
-
-    return softmax(output);
-}
-
-// Train the network using backpropagation and Adam optimizer
-void NeuralNetwork::backpropagate(const std::vector<int>& input, const std::vector<int>& target)
-{
-    std::vector<double> output = forward(input);
-
-    // Compute output layer error
-    std::vector<double> outputError(outputSize);
-    std::vector<double> outputDelta(outputSize);
-    for (int i = 0; i < outputSize; ++i)
-    {
-        outputError[i] = target[i] - output[i];
-        outputDelta[i] = outputError[i];
-    }
-
-    // Compute hidden layer error
-    std::vector<double> hiddenError(hiddenSize, 0.0);
-    for (int i = 0; i < hiddenSize; ++i)
-    {
-        for (int j = 0; j < outputSize; ++j)
-        {
-            hiddenError[i] += outputDelta[j] * weightsHiddenOutput[i][j];
-        }
-    }
-
-    // Update weights using Adam
-    for (int i = 0; i < hiddenSize; ++i)
-    {
-        for (int j = 0; j < outputSize; ++j)
-        {
-            mWeightsHiddenOutput[i][j] = 0.9 * mWeightsHiddenOutput[i][j] + 0.1 * outputDelta[j] * hiddenError[i];
-            vWeightsHiddenOutput[i][j] = 0.999 * vWeightsHiddenOutput[i][j] + 0.001 * outputDelta[j] * hiddenError[i] * hiddenError[i];
-            weightsHiddenOutput[i][j] += learningRate * mWeightsHiddenOutput[i][j] / (sqrt(vWeightsHiddenOutput[i][j]) + 1e-8);
-        }
-    }
-
-    for (int i = 0; i < outputSize; ++i)
-    {
-        mBiasOutput[i] = 0.9 * mBiasOutput[i] + 0.1 * outputDelta[i];
-        vBiasOutput[i] = 0.999 * vBiasOutput[i] + 0.001 * outputDelta[i] * outputDelta[i];
-        biasOutput[i] += learningRate * mBiasOutput[i] / (sqrt(vBiasOutput[i]) + 1e-8);
-    }
-
-    // Apply to input weights
-    for (int i = 0; i < inputSize; ++i)
-    {
-        for (int j = 0; j < hiddenSize; ++j)
-        {
-            mWeightsInputHidden[i][j] = 0.9 * mWeightsInputHidden[i][j] + 0.1 * input[i] * hiddenError[j];
-            vWeightsInputHidden[i][j] = 0.999 * vWeightsInputHidden[i][j] + 0.001 * input[i] * hiddenError[j] * hiddenError[j];
-            weightsInputHidden[i][j] += learningRate * mWeightsInputHidden[i][j] / (sqrt(vWeightsInputHidden[i][j]) + 1e-8);
-        }
-    }
-}
-
-// Train the neural network
-void NeuralNetwork::train(const std::vector<std::vector<int>>& inputs, const std::vector<std::vector<int>>& targets, int epochs, double learningRate)
-{
-    for (int epoch = 0; epoch < epochs; ++epoch)
-    {
-        for (size_t i = 0; i < inputs.size()-3; ++i)
-        {
-            backpropagate(inputs[i], targets[i+1]);
-        }
-        std::cout << "Epoch " << epoch + 1 << "/" << epochs << " completed." << std::endl;
-    }
-}
-
-// Predict output given an input
-std::vector<int> NeuralNetwork::predict(const std::vector<int>& input)
-{
-    std::vector<double> output = forward(input);
-    std::vector<int> predicted(outputSize);
-
-    // Pick the index of the max value (predicted word)
-    int maxIndex = std::max_element(output.begin(), output.end()) - output.begin();
-    predicted[maxIndex] = 1;
-
-    return predicted;
-}
-
-// Print network weights
-void NeuralNetwork::printWeights()
-{
-    std::cout << "Input to Hidden Weights:" << std::endl;
-    for (size_t i = 0; i < weightsInputHidden.size(); ++i)
-    {
-        for (size_t j = 0; j < weightsInputHidden[i].size(); ++j)
-        {
-            std::cout << weightsInputHidden[i][j] << " ";
-        }
-        std::cout << std::endl;
-    }
-
-    std::cout << "Hidden to Output Weights:" << std::endl;
-    for (size_t i = 0; i < weightsHiddenOutput.size(); ++i)
-    {
-        for (size_t j = 0; j < weightsHiddenOutput[i].size(); ++j)
-        {
-            std::cout << weightsHiddenOutput[i][j] << " ";
-        }
-        std::cout << std::endl;
-    }
-}
 // Function to split a string by a delimiter
 std::vector<std::string> split(const std::string& str, char delimiter)
 {
@@ -325,6 +241,7 @@ std::unordered_map<int, std::string> create_vocabulary(const std::string& filena
             vocab[index] = word;
             index++;
         }
+
     }
 
     file.close();
@@ -344,54 +261,11 @@ std::string index_to_word(int index, const std::unordered_map<int, std::string>&
         return "<UNKNOWN>"; // If index is not found in vocabulary
     }
 }
-std::vector<int> generate_sequence(const std::vector<int>& seed, int sequenceLength, NeuralNetwork& model, const std::unordered_map<int, std::string>& vocab)
-{
-    std::vector<int> sequence = seed;  // Start with the seed input
-    for (int i = 0; i < sequenceLength; ++i)
-    {
-        std::vector<int> input = { sequence[sequence.size() - 1]};  // Use the last word in the sequence
-        std::vector<int> predicted = model.predict(input);
-
-        // Find the index of the highest probability
-        int predictedIndex = std::max_element(predicted.begin(), predicted.end()) - predicted.begin();
-        sequence.push_back(predictedIndex);  // Add the predicted word to the sequence
-    }
-
-    // Convert the indices in the sequence to words
-    std::vector<std::string> generatedWords;
-    for (int index : sequence)
-    {
-        generatedWords.push_back(index_to_word(index, vocab));  // Map each index to the corresponding word
-    }
-
-    // Print the generated sequence
-    for (const std::string& word : generatedWords)
-    {
-        std::cout << word << " ";
-    }
-    std::cout << std::endl;
-
-    return sequence;
-}
 
 
-std::string print_generated_sequence(const std::vector<int>& sequence, const std::unordered_map<int, std::string>& vocab)
-{
-    if (!sequence.empty())
-    {
-        int last_idx = sequence.back(); // Get the last index
-
-        return index_to_word(last_idx, vocab);
-    }
-    return "";
-}
-
-std::string activity(std::string& input)
-{
-
-
+int main() {
     double learningRate = 0.01;
-    std::string filename = "test.txt";  // Replace with your actual file path
+    std::string filename = "test.txt"; // Replace with your actual file path
 
     // Create vocabulary from text file
     std::unordered_map<int, std::string> vocab = create_vocabulary(filename);
@@ -399,61 +273,57 @@ std::string activity(std::string& input)
     int inputSize = vocab_size;
     int hiddenSize = 100;
     int outputSize = vocab_size;
+
+    // Create reverse mapping for vocabulary
     std::unordered_map<std::string, int> word_to_index;
-    for (const auto& pair : vocab)
-    {
+    for (const auto& pair : vocab) {
         word_to_index[pair.second] = pair.first;
     }
 
-    // Initialize the neural network
-    NeuralNetwork model(inputSize, hiddenSize, outputSize, learningRate);
-    while(true)
-    {
+    // Prepare inputs and targets for training
+    std::vector<std::vector<double>> inputs, targets;
+    std::ifstream file(filename);
+    std::string line;
+    std::vector<std::string> words;
+    int line_count = 0;
 
-        char delimiter = ' ';
-
-        std::vector<std::string> words = split(input, delimiter);
-        if (words.size() < 2)
-        {
-
-            return "";
+    while (file >> line) {
+        words.push_back(line);
+        if (line_count >= KB_LIMIT) {
+            break;
         }
-        // Split the input into words
-        std::istringstream iss(input);
-        std::string word;
-        std::vector<int> seed;
-
-        // Process each word and map it to the corresponding index
-        while (iss >> word)
-        {
-            if (word_to_index.find(word) != word_to_index.end())
-            {
-                // If the word exists in the map, add the corresponding index to the seed
-                seed.push_back(word_to_index[word]);
-            }
-            else
-            {
-                return word + "' not found in the vocabulary.\n";
-            }
-        }
-        // Generate text with the model
-        int sequenceLength = 50;
-
-        std::vector<int> generated_sequence = generate_sequence(seed, sequenceLength, model, vocab);
-        return print_generated_sequence(generated_sequence, vocab);
     }
 
-}
+    // Prepare training data
+    for (int i = 0; i < words.size() - 1; ++i) {
+        std::vector<double> input(inputSize, 0.0);
+        std::vector<double> target(outputSize, 0.0);
 
-int main()
-{
-    while(true){
+        input[word_to_index[words[i]]] = 1.0;
+        target[word_to_index[words[i + 1]]] = 1.0;
 
-    // Take the user input as a string
-    std::string input;
-    std::cout << "User: ";
-    std::getline(std::cin, input);
-    std::cout << activity(input) << std::endl;
+        inputs.push_back(input);
+        targets.push_back(target);
     }
+
+    // Train the model
+    NeuralNetwork nn(inputSize, hiddenSize, outputSize);
+    nn.train(inputs, targets, 100, learningRate);
+
+    // Generate new text based on trained model
+    string generated_text = "Start";
+    vector<double> input(inputSize, 0.0);
+    input[word_to_index["Start"]] = 1.0; // Starting word for generation
+
+    for (int i = 0; i < 10; ++i) {
+        vector<double> output = nn.feedforward(input);
+        int predicted_word_index = max_element(output.begin(), output.end()) - output.begin();
+        generated_text += " " + index_to_word(predicted_word_index, vocab);
+        fill(input.begin(), input.end(), 0.0);  // Reset input vector
+        input[predicted_word_index] = 1.0;  // Set input to the predicted word
+    }
+
+    cout << "Generated Text: " << generated_text << endl;
+
     return 0;
 }
