@@ -360,12 +360,17 @@ std::vector<int> generate_sequence(const std::vector<int>& seed, int sequenceLen
 
 void print_generated_sequence(const std::vector<int>& sequence, const std::unordered_map<int, std::string>& vocab)
 {
-    for (int idx : sequence)
+    if (!sequence.empty())
     {
-        std::cout << index_to_word(idx, vocab) << " ";
+        int last_idx = sequence.back(); // Get the last index
+        std::cout << "AI: " << index_to_word(last_idx, vocab) << std::endl; // Print only the last word
     }
-    std::cout << std::endl;
+    else
+    {
+        std::cout << "No prediction available." << std::endl; // Handle empty sequence case
+    }
 }
+
 void activity()
 {
 
