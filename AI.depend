@@ -1,0 +1,14 @@
+# depslib dependency file v1.0
+1733020933 source:c:\users\george1\desktop\ai\main.cpp
+	<cmath>
+	<iostream>
+	<fstream>
+	<vector>
+	<unordered_map>
+	<sstream>
+	<cstdlib>
+	<ctime>
+	<algorithm>
+	<cassert>
+	<random>
+
