@@ -12,7 +12,9 @@
 #include <string>
 
 using namespace std;
-int KB_LIMIT = 100;
+
+int KB_LIMIT = 1000;
+
 // Sigmoid activation function
 double sigmoid(double x)
 {
@@ -43,67 +45,68 @@ public:
         hidden_size = hidden;
         output_size = output;
 
-        srand(time(0));
+        // Use random number generation for weights and biases initialization
+        random_device rd;
+        mt19937 gen(rd());
+        uniform_real_distribution<> dis(-0.5, 0.5);
 
-        // Random initialization of weights and biases
-        weights_input_hidden = random_matrix(input_size, hidden_size);
-        weights_hidden_output = random_matrix(hidden_size, output_size);
-        bias_hidden = random_vector(hidden_size);
-        bias_output = random_vector(output_size);
+        weights_input_hidden = random_matrix(input_size, hidden_size, gen, dis);
+        weights_hidden_output = random_matrix(hidden_size, output_size, gen, dis);
+        bias_hidden = random_vector(hidden_size, gen, dis);
+        bias_output = random_vector(output_size, gen, dis);
     }
 
     // Random matrix initialization
-    vector<vector<double>> random_matrix(int rows, int cols)
+    vector<vector<double>> random_matrix(int rows, int cols, mt19937& gen, uniform_real_distribution<>& dis)
     {
         vector<vector<double>> matrix(rows, vector<double>(cols));
         for (int i = 0; i < rows; ++i)
         {
             for (int j = 0; j < cols; ++j)
             {
-                matrix[i][j] = (rand() % 1000) / 1000.0 - 0.5; // Random values between -0.5 and 0.5
+                matrix[i][j] = dis(gen);
             }
         }
         return matrix;
     }
 
     // Random vector initialization
-    vector<double> random_vector(int size)
+    vector<double> random_vector(int size, mt19937& gen, uniform_real_distribution<>& dis)
     {
         vector<double> vec(size);
         for (int i = 0; i < size; ++i)
         {
-            vec[i] = (rand() % 1000) / 1000.0 - 0.5;
+            vec[i] = dis(gen);
         }
         return vec;
     }
 
     // Feedforward function to calculate the output
-    vector<double> feedforward(vector<double> inputs)
+    vector<double> feedforward(const vector<double>& inputs)
     {
-        // Hidden layer
         vector<double> hidden_output(hidden_size);
-        for (int i = 0; i < hidden_size; ++i)
+        vector<double> final_output(output_size);
+
+        // Hidden layer calculations
+        for (int h = 0; h < hidden_size; ++h)
         {
-            hidden_output[i] = 0;
-            for (int j = 0; j < input_size; ++j)
+            hidden_output[h] = bias_hidden[h];
+            for (int i = 0; i < input_size; ++i)
             {
-                hidden_output[i] += inputs[j] * weights_input_hidden[j][i];
+                hidden_output[h] += inputs[i] * weights_input_hidden[i][h];
             }
-            hidden_output[i] += bias_hidden[i];
-            hidden_output[i] = sigmoid(hidden_output[i]);
+            hidden_output[h] = sigmoid(hidden_output[h]);
         }
 
-        // Output layer
-        vector<double> final_output(output_size);
-        for (int i = 0; i < output_size; ++i)
+        // Output layer calculations
+        for (int o = 0; o < output_size; ++o)
         {
-            final_output[i] = 0;
-            for (int j = 0; j < hidden_size; ++j)
+            final_output[o] = bias_output[o];
+            for (int h = 0; h < hidden_size; ++h)
             {
-                final_output[i] += hidden_output[j] * weights_hidden_output[j][i];
+                final_output[o] += hidden_output[h] * weights_hidden_output[h][o];
             }
-            final_output[i] += bias_output[i];
-            final_output[i] = sigmoid(final_output[i]);
+            final_output[o] = sigmoid(final_output[o]);
         }
 
         return final_output;
@@ -199,31 +202,32 @@ public:
 };
 
 // Function to split a string by a delimiter
-std::vector<std::string> split(const std::string& str, char delimiter)
+vector<string> split(const string& str, char delimiter)
 {
-    std::vector<std::string> tokens;
-    std::stringstream ss(str);
-    std::string token;
+    vector<string> tokens;
+    stringstream ss(str);
+    string token;
 
-    while (std::getline(ss, token, delimiter))
+    while (getline(ss, token, delimiter))
     {
         tokens.push_back(token);
     }
 
     return tokens;
 }
+
 // Function to read the text file and generate a vocabulary
-std::unordered_map<int, std::string> create_vocabulary(const std::string& filename)
+unordered_map<int, string> create_vocabulary(const string& filename)
 {
-    std::unordered_map<int, std::string> vocab;
-    std::unordered_map<std::string, int> word_to_index;
-    std::ifstream file(filename);
-    std::string word;
+    unordered_map<int, string> vocab;
+    unordered_map<string, int> word_to_index;
+    ifstream file(filename);
+    string word;
     int index = 0;
 
     if (!file.is_open())
     {
-        std::cerr << "Could not open the file!" << std::endl;
+        cerr << "Could not open the file!" << endl;
         return vocab;
     }
 
@@ -235,7 +239,6 @@ std::unordered_map<int, std::string> create_vocabulary(const std::string& filena
             vocab[index] = word;
             index++;
         }
-
     }
 
     file.close();
@@ -243,7 +246,7 @@ std::unordered_map<int, std::string> create_vocabulary(const std::string& filena
 }
 
 // Function to map integer indices to words
-std::string index_to_word(int index, const std::unordered_map<int, std::string>& vocab)
+string index_to_word(int index, const unordered_map<int, string>& vocab)
 {
     auto it = vocab.find(index);
     if (it != vocab.end())
@@ -252,7 +255,7 @@ std::string index_to_word(int index, const std::unordered_map<int, std::string>&
     }
     else
     {
-        return "<UNKNOWN>"; // If index is not found in vocabulary
+        return "<UNKNOWN>";
     }
 }
 
