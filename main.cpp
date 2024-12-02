@@ -472,9 +472,7 @@ int main()
             cout << word << " ";
 
             // Shift the sequence and add the predicted word
-            input.erase(input.begin(), input.begin() + vocab_size);
-            input.insert(input.end(), vocab_size, 0.0);
-            input[predicted_index + (sequence_length - 1) * vocab_size] = 1.0;
+            input[predicted_index + (sequence_length - 1) * vocab_size] = 0.0;
         }
         cout << endl;
 
