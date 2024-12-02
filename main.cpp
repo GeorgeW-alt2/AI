@@ -13,7 +13,7 @@
 
 using namespace std;
 
-int KB_LIMIT = 500;
+int KB_LIMIT = 1500;
 int GEN_LEN = 140;
 int EPOCHS = 5;
 // Sigmoid activation function
@@ -203,19 +203,41 @@ public:
 };
 
 // Function to split a string by a delimiter
+#include <vector>
+#include <string>
+#include <sstream>
+
+
 vector<string> split(const string& str, char delimiter)
 {
-    vector<string> tokens;
+    vector<string> result;
     stringstream ss(str);
     string token;
+    vector<string> currentGroup;
 
     while (getline(ss, token, delimiter))
     {
-        tokens.push_back(token);
+        currentGroup.push_back(token);
+
+        // Once we have 3 words, combine them into one string and add to result
+        if (currentGroup.size() == 3)
+        {
+            result.push_back(currentGroup[0] + " " + currentGroup[1] + " " + currentGroup[2]);
+            currentGroup.clear();  // Reset the current group
+        }
     }
 
-    return tokens;
+    // Handle the case where there are less than 3 words left at the end
+    if (!currentGroup.empty())
+    {
+        result.push_back(currentGroup[0]);
+        if (currentGroup.size() > 1) result.back() += " " + currentGroup[1];
+        if (currentGroup.size() > 2) result.back() += " " + currentGroup[2];
+    }
+
+    return result;
 }
+
 
 // Function to read the text file and generate a vocabulary
 unordered_map<int, string> create_vocabulary(const string& filename)
@@ -232,16 +254,39 @@ unordered_map<int, string> create_vocabulary(const string& filename)
         return vocab;
     }
 
+    vector<string> currentGroup;
     while (file >> word)
     {
-        if (word_to_index.find(word) == word_to_index.end())
+        currentGroup.push_back(word);
+
+        // Once we have 3 words, combine them into one string and add to vocabulary
+        if (currentGroup.size() == 3)
         {
-            word_to_index[word] = index;
-            vocab[index] = word;
-            index++;
-            if (index >= KB_LIMIT){
-            break;
+            string group = currentGroup[0] + " " + currentGroup[1] + " " + currentGroup[2];
+            if (word_to_index.find(group) == word_to_index.end())  // Add new group to vocabulary
+            {
+                word_to_index[group] = index;
+                vocab[index] = group;
+                index++;
+                if (index >= KB_LIMIT)
+                {
+                    break;
+                }
             }
+            currentGroup.clear();  // Reset the current group
+        }
+    }
+
+    // Handle any remaining words if they are less than 3 at the end of the file
+    if (!currentGroup.empty())
+    {
+        string group = currentGroup[0];
+        if (currentGroup.size() > 1) group += " " + currentGroup[1];
+        if (currentGroup.size() > 2) group += " " + currentGroup[2];
+        if (word_to_index.find(group) == word_to_index.end())
+        {
+            word_to_index[group] = index;
+            vocab[index] = group;
         }
     }
 
