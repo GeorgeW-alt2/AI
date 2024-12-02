@@ -203,7 +203,12 @@ public:
 };
 
 
-
+string to_lowercase(const string& str)
+{
+    string lower_str = str;
+    transform(lower_str.begin(), lower_str.end(), lower_str.begin(), ::tolower);
+    return lower_str;
+}
 
 vector<string> split(const string& str, char delimiter)
 {
@@ -214,7 +219,7 @@ vector<string> split(const string& str, char delimiter)
 
     while (getline(ss, token, delimiter))
     {
-        currentGroup.push_back(token);
+        currentGroup.push_back(to_lowercase(token));  // Convert token to lowercase
 
         // Once we have 3 words, combine them into one string and add to result
         if (currentGroup.size() == 3)
@@ -254,7 +259,7 @@ unordered_map<int, string> create_vocabulary(const string& filename)
     vector<string> currentGroup;
     while (file >> word)
     {
-        currentGroup.push_back(word);
+        currentGroup.push_back(to_lowercase(word));  // Convert token to lowercase
 
         // Once we have 3 words, combine them into one string and add to vocabulary
         if (currentGroup.size() == 3)
