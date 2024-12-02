@@ -13,7 +13,7 @@
 
 using namespace std;
 
-int KB_LIMIT = 1500;
+int KB_LIMIT = 750;
 int GEN_LEN = 140;
 int EPOCHS = 5;
 // Sigmoid activation function
@@ -202,10 +202,7 @@ public:
     }
 };
 
-// Function to split a string by a delimiter
-#include <vector>
-#include <string>
-#include <sstream>
+
 
 
 vector<string> split(const string& str, char delimiter)
@@ -449,15 +446,17 @@ int main()
             // Get the model's prediction
             vector<double> output = model.feedforward(input);
 // Smooth the probabilities (additive smoothing)
-for (double& prob : output) {
-    prob += 1e-3; // Small constant for smoothing
-}
+            for (double& prob : output)
+            {
+                prob += 1e-3; // Small constant for smoothing
+            }
 
 // Normalize the probabilities
-double sum = accumulate(output.begin(), output.end(), 0.0);
-for (double& prob : output) {
-    prob /= sum;
-}
+            double sum = accumulate(output.begin(), output.end(), 0.0);
+            for (double& prob : output)
+            {
+                prob /= sum;
+            }
             // Apply temperature scaling
             vector<double> probabilities = apply_temperature(output, temperature);
 
