@@ -126,10 +126,10 @@ public:
         for (int epoch = 0; epoch < epochs; ++epoch)
         {
             double loss = 0;
-            for (size_t i = 0; i < inputs.size(); ++i)
+            for (size_t i = 0; i < inputs.size()-1; ++i)
             {
                 const vector<double>& input = inputs[i];
-                const vector<double>& target = targets[i];
+                const vector<double>& target = targets[i+1];
 
                 // Feedforward
                 for (int h = 0; h < hidden_size; ++h)
@@ -472,7 +472,7 @@ int main()
             cout << word << " ";
 
             // Shift the sequence and add the predicted word
-            input[predicted_index + (sequence_length - 1) * vocab_size] = 0.0;
+            input[predicted_index + (sequence_length - 1) * vocab_size] = 1.0;
         }
         cout << endl;
 
