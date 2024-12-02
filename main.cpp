@@ -400,15 +400,18 @@ int main()
 
     inputs = prepare_sequences(words, sequence_length, word_to_index, vocab_size);
 
-    for (size_t i = sequence_length; i < words.size(); ++i)
+  for (size_t i = sequence_length; i < words.size(); ++i)
+{
+    vector<double> target(vocab_size, 0.0);
+    auto it = word_to_index.find(words[i]); // Use find to check existence
+    if (it != word_to_index.end())
     {
-        vector<double> target(vocab_size, 0.0);
-        if (word_to_index.find(words[i]) != word_to_index.end())
-        {
-            target[word_to_index.at(words[i])] = 1.0;
-        }
-        targets.push_back(target);
+        target[it->second] = 2.0; // Access safely using the iterator
     }
+
+    targets.push_back(target);
+}
+
 
     NeuralNetwork model(input_size, hidden_size, output_size);
 
@@ -472,7 +475,7 @@ int main()
             cout << word << " ";
 
             // Shift the sequence and add the predicted word
-            input[predicted_index + (sequence_length - 1) * vocab_size] =2.0;
+            input[predicted_index + (sequence_length - 1)] =2.0;
         }
         cout << endl;
 
