@@ -1,4 +1,4 @@
-#Transformer 4.1 - George W - 5,12,2024
+#Spiking neural networks (SNNs) 4.2 - George W - 5,12,2024
 import numpy as np
 import pickle
 import re
@@ -20,7 +20,7 @@ feedforward_enhancer = KB_MEMORY_UNCOMPRESSED
 def preprocess_text(text):
     """Clean and tokenize text."""
     cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text)
-    tokens = text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
+    tokens = text.split()[:KB_MEMORY_UNCOMPRESSED]
     return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
 
 def build_vocabulary(text_data):
@@ -31,6 +31,16 @@ def build_vocabulary(text_data):
     if tokens:  # Ensure the tokens list is not empty
         last_word = tokens[-1]
         word_counts[last_word] += feedforward_enhancer
+        word_counts["what"] += feedforward_enhancer
+        word_counts["when"] += feedforward_enhancer
+        word_counts["why"] += feedforward_enhancer
+        word_counts["who"] += feedforward_enhancer
+        word_counts["how"] += feedforward_enhancer
+        word_counts["write"] += feedforward_enhancer
+        word_counts["make"] += feedforward_enhancer
+        word_counts["design"] += feedforward_enhancer
+
+
     vocab = sorted(word_counts, key=word_counts.get, reverse=True)
     word_to_index = {word: i for i, word in enumerate(vocab)}
     return word_to_index, len(vocab)
@@ -146,7 +156,7 @@ def main():
 
     if choice == '1':
         with open("test.txt", encoding="utf-8") as f:
-            text = f.read()
+            text = f.read().lower()
 
         word_to_index, vocab_size = build_vocabulary(text)
         sequences = create_sequences(word_to_index, preprocess_text(text), sequence_length=4)
