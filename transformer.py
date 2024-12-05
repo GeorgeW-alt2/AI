@@ -1,4 +1,4 @@
-#Spiking neural networks (SNNs) 4.2 - George W - 5,12,2024
+#Spiking neural network (SNNs) 4.21 - George W - 5,12,2024
 import numpy as np
 import pickle
 import re
@@ -27,7 +27,6 @@ def build_vocabulary(text_data):
     """Build vocabulary with word frequencies."""
     tokens = preprocess_text(text_data)
     word_counts = {word: tokens.count(word) for word in set(tokens)}
-    # Subtract 1 from the count of the last word in the tokens list
     if tokens:  # Ensure the tokens list is not empty
         last_word = tokens[-1]
         word_counts[last_word] += feedforward_enhancer
