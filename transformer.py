@@ -1,4 +1,4 @@
-#Transformer 4.0 - George W - 5,12,2024
+#Transformer 4.1 - George W - 5,12,2024
 import numpy as np
 import pickle
 import re
@@ -14,7 +14,7 @@ KB_MEMORY_UNCOMPRESSED = 100000
 n = 4  # Use quadgrams for training
 num_epochs = 10
 generate_length = 1000
-temperature = 0.7
+temperature = 0.3
 feedforward_enhancer = KB_MEMORY_UNCOMPRESSED
 # Preprocessing and Vocabulary
 def preprocess_text(text):
