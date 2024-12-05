@@ -1,4 +1,4 @@
-#Transformer 3.0 - George W - 29,NOV,2024
+#Transformer 4.0 - George W - 5,12,2024
 import numpy as np
 import pickle
 import re
@@ -10,10 +10,10 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 10000
+KB_MEMORY_UNCOMPRESSED = 100000
 n = 4  # Use quadgrams for training
 num_epochs = 10
-generate_length = 140
+generate_length = 1000
 temperature = 0.7
 feedforward_enhancer = KB_MEMORY_UNCOMPRESSED
 # Preprocessing and Vocabulary
@@ -131,7 +131,7 @@ def generate_text(model, word_to_index, input_text, sequence_length, generate_le
     for _ in range(generate_length):
         with torch.no_grad():
             output = model(input_tensor)
-            probabilities = torch.softmax(output / temperature, dim=-1).squeeze()
+            probabilities = torch.softmax(output / temperature, dim=1).squeeze()
             next_word_idx = torch.multinomial(probabilities, 1).item()
             generated_text.append(next_word_idx)
 
