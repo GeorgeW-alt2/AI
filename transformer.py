@@ -10,12 +10,12 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 4000
+KB_MEMORY_UNCOMPRESSED = 10000
 n = 4  # Use quadgrams for training
-num_epochs = 20
+num_epochs = 10
 generate_length = 140
 temperature = 0.7
-
+feedforward_enhancer = KB_MEMORY_UNCOMPRESSED
 # Preprocessing and Vocabulary
 def preprocess_text(text):
     """Clean and tokenize text."""
@@ -27,14 +27,25 @@ def build_vocabulary(text_data):
     """Build vocabulary with word frequencies."""
     tokens = preprocess_text(text_data)
     word_counts = {word: tokens.count(word) for word in set(tokens)}
+    # Subtract 1 from the count of the last word in the tokens list
+    if tokens:  # Ensure the tokens list is not empty
+        last_word = tokens[-1]
+        word_counts[last_word] += feedforward_enhancer
     vocab = sorted(word_counts, key=word_counts.get, reverse=True)
     word_to_index = {word: i for i, word in enumerate(vocab)}
     return word_to_index, len(vocab)
 
 def create_sequences(word_to_index, text, sequence_length):
     """Convert text into sequences."""
+    # Encode the text using the word-to-index mapping
     encoded = [word_to_index[word] for word in text if word in word_to_index]
+    
+
+    
+    
+    # Create sequences of the specified length
     return [(encoded[i-sequence_length:i], encoded[i]) for i in range(sequence_length, len(encoded))]
+
 
 # Dataset Class
 class TextDataset(Dataset):
