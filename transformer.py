@@ -1,4 +1,4 @@
-#Spiking neural network (SNNs) 4.21 - George W - 5,12,2024
+#Spiking neural network (SNNs) 4.4 - George W - 5,12,2024
 import numpy as np
 import pickle
 import re
@@ -48,9 +48,6 @@ def create_sequences(word_to_index, text, sequence_length):
     """Convert text into sequences."""
     # Encode the text using the word-to-index mapping
     encoded = [word_to_index[word] for word in text if word in word_to_index]
-    
-
-    
     
     # Create sequences of the specified length
     return [(encoded[i-sequence_length:i], encoded[i]) for i in range(sequence_length, len(encoded))]
@@ -173,7 +170,7 @@ def main():
 
     while True:
         user_input = input("User: ")
-        print("AI:", generate_text(model, word_to_index, user_input, sequence_length=4, generate_length=generate_length, temperature=temperature))
+        print("AI:", generate_text(model, word_to_index, generate_text(model, word_to_index, user_input, sequence_length=4, generate_length=generate_length, temperature=temperature), sequence_length=4, generate_length=generate_length, temperature=temperature))
 
 if __name__ == "__main__":
     main()
