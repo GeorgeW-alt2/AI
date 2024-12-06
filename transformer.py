@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 100000
+KB_MEMORY_UNCOMPRESSED = 10000
 n = 4  # Use quadgrams for training
 num_epochs = 10
 generate_length = 1000
@@ -76,7 +76,7 @@ class KANEmbedding(nn.Module):
         return torch.cat((self.word_embedding(x), self.knowledge_embedding(x)), dim=-1)
 
 class KnowledgeAugmentedLSTM(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386, dropout_rate=0.3):
+    def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386, dropout_rate=0.1):
         super().__init__()
         self.embedding = KANEmbedding(vocab_size, embedding_dim, knowledge_dim)
         self.lstm = nn.LSTM(embedding_dim + knowledge_dim, rnn_units, batch_first=True)
