@@ -1,4 +1,4 @@
-#Spiking neural network (SNNs) 4.4 - George W - 5,12,2024
+#Spiking neural network (SNN) 5.1 - George W - 6,12,2024
 import numpy as np
 import pickle
 import re
@@ -76,7 +76,7 @@ class KANEmbedding(nn.Module):
         return torch.cat((self.word_embedding(x), self.knowledge_embedding(x)), dim=-1)
 
 class KnowledgeAugmentedLSTM(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386, dropout_rate=0.1):
+    def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386, dropout_rate=0.4):
         super().__init__()
         self.embedding = KANEmbedding(vocab_size, embedding_dim, knowledge_dim)
         self.lstm = nn.LSTM(embedding_dim + knowledge_dim, rnn_units, batch_first=True)
