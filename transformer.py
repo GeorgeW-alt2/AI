@@ -141,7 +141,7 @@ def generate_text(model, word_to_index, input_text, sequence_length, generate_le
             next_word_idx = torch.multinomial(probabilities, 1).item()
             generated_text.append(next_word_idx)
 
-            input_tensor = torch.cat((input_tensor[:, 1:next_word_idx], torch.tensor([[next_word_idx]])), dim=1)
+            input_tensor = torch.cat((input_tensor[:, next_word_idx:], torch.tensor([[next_word_idx]])), dim=1)
 
     reverse_vocab = {i: word for word, i in word_to_index.items()}
     return ' '.join([reverse_vocab.get(idx, "<UNK>") for idx in generated_text])
