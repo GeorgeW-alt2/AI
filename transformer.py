@@ -1,4 +1,4 @@
-#Spiking neural network (SNN) 6.1 - George W - 9,12,2024
+#Spiking neural network (SNN) 6.3 - George W - 9,12,2024
 import numpy as np
 import pickle
 import re
@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 10000
+KB_MEMORY_UNCOMPRESSED = 100000
 n = 4  # Use quadgrams for training
 num_epochs = 10
 generate_length = 1000
@@ -147,7 +147,7 @@ def generate_text(model, word_to_index, input_text, sequence_length, generate_le
 
             # Combine prior and likelihood (Bayesian update)
             posterior = prior * likelihood
-            posterior = posterior / posterior.sum()  # Normalize the posterior
+            posterior = posterior / (likelihood+prior).sum()  # Normalize the posterior
 
             # Sample the next word based on the posterior distribution
             next_word_idx = torch.multinomial(posterior, 1).item()
