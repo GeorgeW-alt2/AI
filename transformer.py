@@ -1,4 +1,4 @@
-#Spiking neural network (SNN) 6.0 - George W - 9,12,2024
+#Spiking neural network (SNN) 6.1 - George W - 9,12,2024
 import numpy as np
 import pickle
 import re
@@ -134,14 +134,27 @@ def generate_text(model, word_to_index, input_text, sequence_length, generate_le
     generated_text = []
     input_tensor = torch.tensor(indices[-sequence_length:], dtype=torch.long).unsqueeze(0)
 
+    # Define a simple prior based on word frequency in the vocabulary
+    word_frequencies = [word_to_index.get(word, 0) for word in word_to_index]
+    prior = torch.tensor(word_frequencies, dtype=torch.float32)
+    prior = prior / prior.sum()  # Normalize to make it a valid probability distribution
+
     for _ in range(generate_length):
         with torch.no_grad():
+            # Get model output (likelihood)
             output = model(input_tensor)
-            probabilities = torch.softmax(output / temperature, dim=1).squeeze()
-            next_word_idx = torch.multinomial(probabilities, 1).item()
+            likelihood = torch.softmax(output / temperature, dim=1).squeeze()
+
+            # Combine prior and likelihood (Bayesian update)
+            posterior = prior * likelihood
+            posterior = posterior / posterior.sum()  # Normalize the posterior
+
+            # Sample the next word based on the posterior distribution
+            next_word_idx = torch.multinomial(posterior, 1).item()
             generated_text.append(next_word_idx)
 
-            input_tensor = torch.cat((input_tensor[:, next_word_idx:], torch.tensor([[next_word_idx]])), dim=1)
+            # Update input tensor by adding the new word
+            input_tensor = torch.cat((input_tensor[:, 1:], torch.tensor([[next_word_idx]])), dim=1)
 
     reverse_vocab = {i: word for word, i in word_to_index.items()}
     return ' '.join([reverse_vocab.get(idx, "<UNK>") for idx in generated_text])
