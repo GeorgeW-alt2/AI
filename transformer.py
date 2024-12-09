@@ -1,4 +1,4 @@
-#Spiking neural network (SNN) 6.1 - George W - 9,12,2024
+#Spiking neural network (SNN) 6.5 - George W - 9,12,2024
 import numpy as np
 import pickle
 import re
@@ -74,22 +74,45 @@ class KANEmbedding(nn.Module):
 
     def forward(self, x):
         return torch.cat((self.word_embedding(x), self.knowledge_embedding(x)), dim=-1)
+class MagicSquareTransformation(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.magic_matrix = nn.Parameter(torch.randn(dim, dim))
+        self.magic_sum = nn.Parameter(torch.tensor(1.0))  # Target magic sum
+
+    def forward(self, x):
+        return x @ self.magic_matrix
+
+    def regularization_loss(self):
+        row_sums = torch.sum(self.magic_matrix, dim=1)
+        col_sums = torch.sum(self.magic_matrix, dim=0)
+        diag_sum = torch.trace(self.magic_matrix)
+        anti_diag_sum = torch.sum(torch.diagonal(torch.flip(self.magic_matrix, [1])))
+        loss = (
+            torch.sum((row_sums - self.magic_sum) ** 2) +
+            torch.sum((col_sums - self.magic_sum) ** 2) +
+            (diag_sum - self.magic_sum) ** 2 +
+            (anti_diag_sum - self.magic_sum) ** 2
+        )
+        return loss
 
 class KnowledgeAugmentedLSTM(nn.Module):
     def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386, dropout_rate=0.4):
         super().__init__()
         self.embedding = KANEmbedding(vocab_size, embedding_dim, knowledge_dim)
+        self.magic_transform = MagicSquareTransformation(embedding_dim + knowledge_dim)
         self.lstm = nn.LSTM(embedding_dim + knowledge_dim, rnn_units, batch_first=True)
         self.fc = nn.Linear(rnn_units, vocab_size)
         self.dropout = nn.Dropout(dropout_rate)
 
     def forward(self, x):
         x = self.embedding(x)
+        x = self.magic_transform(x)  # Apply magic square transformation
         lstm_out, _ = self.lstm(x)
         return self.fc(self.dropout(lstm_out[:, -1, :]))
 
-# Training Function
-def train_model(model, data_loader, num_epochs, lr=0.001):
+# Training Function with Magic Square Loss
+def train_model(model, data_loader, num_epochs, lr=0.001, lambda_magic=0.01):
     optimizer = optim.Adam(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
     model.train()
@@ -99,12 +122,14 @@ def train_model(model, data_loader, num_epochs, lr=0.001):
         for inputs, targets in tqdm(data_loader, desc=f"Epoch {epoch+1}/{num_epochs}"):
             optimizer.zero_grad()
             outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
+            classification_loss = criterion(outputs, targets)
+            magic_loss = model.magic_transform.regularization_loss()
+            total_loss = classification_loss + lambda_magic * magic_loss
+            total_loss.backward()
             optimizer.step()
-            epoch_loss += loss.item()
+            epoch_loss += total_loss.item()
 
-        print(f"Epoch {epoch+1}, Loss: {epoch_loss:.4f}")
+        print(f"Epoch {epoch+1}, Loss: {epoch_loss:.4f}, Magic Loss: {magic_loss.item():.4f}")
 
 # Save and Load Functions
 def save_model_and_vocab(model, word_to_index):
