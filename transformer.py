@@ -1,4 +1,3 @@
-#Spiking neural network (SNN) 6.5 - George W - 9,12,2024
 import numpy as np
 import pickle
 import re
@@ -10,12 +9,13 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 10000
+KB_MEMORY_UNCOMPRESSED = 1000
 n = 4  # Use quadgrams for training
 num_epochs = 10
 generate_length = 1000
 temperature = 0.3
 feedforward_enhancer = KB_MEMORY_UNCOMPRESSED
+
 # Preprocessing and Vocabulary
 def preprocess_text(text):
     """Clean and tokenize text."""
@@ -30,15 +30,6 @@ def build_vocabulary(text_data):
     if tokens:  # Ensure the tokens list is not empty
         last_word = tokens[-1]
         word_counts[last_word] += feedforward_enhancer
-        word_counts["what"] += feedforward_enhancer
-        word_counts["when"] += feedforward_enhancer
-        word_counts["why"] += feedforward_enhancer
-        word_counts["who"] += feedforward_enhancer
-        word_counts["how"] += feedforward_enhancer
-        word_counts["write"] += feedforward_enhancer
-        word_counts["make"] += feedforward_enhancer
-        word_counts["design"] += feedforward_enhancer
-
 
     vocab = sorted(word_counts, key=word_counts.get, reverse=True)
     word_to_index = {word: i for i, word in enumerate(vocab)}
@@ -46,12 +37,8 @@ def build_vocabulary(text_data):
 
 def create_sequences(word_to_index, text, sequence_length):
     """Convert text into sequences."""
-    # Encode the text using the word-to-index mapping
     encoded = [word_to_index[word] for word in text if word in word_to_index]
-    
-    # Create sequences of the specified length
     return [(encoded[i-sequence_length:i], encoded[i]) for i in range(sequence_length, len(encoded))]
-
 
 # Dataset Class
 class TextDataset(Dataset):
@@ -65,19 +52,11 @@ class TextDataset(Dataset):
         seq, target = self.sequences[idx]
         return torch.tensor(seq, dtype=torch.long), torch.tensor(target, dtype=torch.long)
 
-# Knowledge-Augmented LSTM Model
-class KANEmbedding(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, knowledge_dim):
-        super().__init__()
-        self.word_embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.knowledge_embedding = nn.Embedding(vocab_size, knowledge_dim)
-
-    def forward(self, x):
-        return torch.cat((self.word_embedding(x), self.knowledge_embedding(x)), dim=-1)
+# Magic Square Transformation
 class MagicSquareTransformation(nn.Module):
-    def __init__(self, dim):
+    def __init__(self, input_dim):
         super().__init__()
-        self.magic_matrix = nn.Parameter(torch.randn(dim, dim))
+        self.magic_matrix = nn.Parameter(torch.randn(input_dim, input_dim))
         self.magic_sum = nn.Parameter(torch.tensor(1.0))  # Target magic sum
 
     def forward(self, x):
@@ -96,10 +75,11 @@ class MagicSquareTransformation(nn.Module):
         )
         return loss
 
+# Knowledge-Augmented LSTM Model
 class KnowledgeAugmentedLSTM(nn.Module):
     def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386, dropout_rate=0.4):
         super().__init__()
-        self.embedding = KANEmbedding(vocab_size, embedding_dim, knowledge_dim)
+        self.embedding = nn.Embedding(vocab_size, embedding_dim + knowledge_dim)
         self.magic_transform = MagicSquareTransformation(embedding_dim + knowledge_dim)
         self.lstm = nn.LSTM(embedding_dim + knowledge_dim, rnn_units, batch_first=True)
         self.fc = nn.Linear(rnn_units, vocab_size)
@@ -111,7 +91,7 @@ class KnowledgeAugmentedLSTM(nn.Module):
         lstm_out, _ = self.lstm(x)
         return self.fc(self.dropout(lstm_out[:, -1, :]))
 
-# Training Function with Magic Square Loss
+# Training Function
 def train_model(model, data_loader, num_epochs, lr=0.001, lambda_magic=0.01):
     optimizer = optim.Adam(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
@@ -143,7 +123,7 @@ def load_model_and_vocab(vocab_path='vocab.pkl', model_path='knowledge_augmented
         word_to_index = pickle.load(f)
     vocab_size = len(word_to_index)
     model = KnowledgeAugmentedLSTM(vocab_size)
-    model.load_state_dict(torch.load(model_path, weights_only= True))
+    model.load_state_dict(torch.load(model_path))
     model.eval()
     print("Model and vocabulary loaded.")
     return model, word_to_index
@@ -159,26 +139,12 @@ def generate_text(model, word_to_index, input_text, sequence_length, generate_le
     generated_text = []
     input_tensor = torch.tensor(indices[-sequence_length:], dtype=torch.long).unsqueeze(0)
 
-    # Define a simple prior based on word frequency in the vocabulary
-    word_frequencies = [word_to_index.get(word, 0) for word in word_to_index]
-    prior = torch.tensor(word_frequencies, dtype=torch.float32)
-    prior = prior / prior.sum()  # Normalize to make it a valid probability distribution
-
     for _ in range(generate_length):
         with torch.no_grad():
-            # Get model output (likelihood)
             output = model(input_tensor)
             likelihood = torch.softmax(output / temperature, dim=1).squeeze()
-
-            # Combine prior and likelihood (Bayesian update)
-            posterior = prior * likelihood
-            posterior = posterior / posterior.sum()  # Normalize the posterior
-
-            # Sample the next word based on the posterior distribution
-            next_word_idx = torch.multinomial(posterior, 1).item()
+            next_word_idx = torch.multinomial(likelihood, 1).item()
             generated_text.append(next_word_idx)
-
-            # Update input tensor by adding the new word
             input_tensor = torch.cat((input_tensor[:, 1:], torch.tensor([[next_word_idx]])), dim=1)
 
     reverse_vocab = {i: word for word, i in word_to_index.items()}
@@ -208,7 +174,8 @@ def main():
 
     while True:
         user_input = input("User: ")
-        print("AI:", generate_text(model, word_to_index, generate_text(model, word_to_index, user_input, sequence_length=4, generate_length=generate_length, temperature=temperature), sequence_length=4, generate_length=generate_length, temperature=temperature))
+        response = generate_text(model, word_to_index, user_input, sequence_length=4, generate_length=generate_length, temperature=temperature)
+        print("AI:", response)
 
 if __name__ == "__main__":
     main()
