@@ -1,3 +1,4 @@
+
 import numpy as np
 import pickle
 import re
@@ -9,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY_UNCOMPRESSED = 30000
 n = 4  # Use quadgrams for training
 num_epochs = 10
 generate_length = 1000
@@ -69,7 +70,7 @@ class MagicSquareTransformation(nn.Module):
         anti_diag_sum = torch.sum(torch.diagonal(torch.flip(self.magic_matrix, [1])))
         loss = (
             torch.sum((row_sums - self.magic_sum) ** 2) +
-            torch.sum((col_sums - self.magic_sum) ** 2) +
+            torch.sum((col_sums - anti_diag_sum) ** 2) +
             (diag_sum - self.magic_sum) ** 2 +
             (anti_diag_sum - self.magic_sum) ** 2
         )
@@ -102,6 +103,7 @@ def train_model(model, data_loader, num_epochs, lr=0.001, lambda_magic=0.01):
         for inputs, targets in tqdm(data_loader, desc=f"Epoch {epoch+1}/{num_epochs}"):
             optimizer.zero_grad()
             outputs = model(inputs)
+
             classification_loss = criterion(outputs, targets)
             magic_loss = model.magic_transform.regularization_loss()
             total_loss = classification_loss + lambda_magic * magic_loss
