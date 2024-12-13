@@ -1,4 +1,3 @@
-
 import numpy as np
 import pickle
 import re
@@ -10,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 30000
+KB_MEMORY_UNCOMPRESSED = 100000
 n = 4  # Use quadgrams for training
 num_epochs = 10
 generate_length = 1000
@@ -53,42 +52,36 @@ class TextDataset(Dataset):
         seq, target = self.sequences[idx]
         return torch.tensor(seq, dtype=torch.long), torch.tensor(target, dtype=torch.long)
 
-# Magic Square Transformation
-class MagicSquareTransformation(nn.Module):
+# Magic Triangle Transformation
+class MagicTriangleTransformation(nn.Module):
     def __init__(self, input_dim):
         super().__init__()
-        self.magic_matrix = nn.Parameter(torch.randn(input_dim, input_dim))
+        # Initialize an upper triangular matrix
+        self.triangle_matrix = nn.Parameter(torch.triu(torch.randn(input_dim, input_dim)))
         self.magic_sum = nn.Parameter(torch.tensor(1.0))  # Target magic sum
 
     def forward(self, x):
-        return x @ self.magic_matrix
+        return x @ self.triangle_matrix
 
     def regularization_loss(self):
-        row_sums = torch.sum(self.magic_matrix, dim=1)
-        col_sums = torch.sum(self.magic_matrix, dim=0)
-        diag_sum = torch.trace(self.magic_matrix)
-        anti_diag_sum = torch.sum(torch.diagonal(torch.flip(self.magic_matrix, [1])))
-        loss = (
-            torch.sum((row_sums - self.magic_sum) ** 2) +
-            torch.sum((col_sums - anti_diag_sum) ** 2) +
-            (diag_sum - self.magic_sum) ** 2 +
-            (anti_diag_sum - self.magic_sum) ** 2
-        )
+        # Compute the sum of the upper triangular matrix elements
+        upper_triangle_sum = torch.sum(torch.triu(self.triangle_matrix))
+        loss = (upper_triangle_sum - self.magic_sum) ** -1
         return loss
 
-# Knowledge-Augmented LSTM Model
+# Knowledge-Augmented LSTM Model with Magic Triangle Transformation
 class KnowledgeAugmentedLSTM(nn.Module):
     def __init__(self, vocab_size, embedding_dim=150, knowledge_dim=100, rnn_units=386, dropout_rate=0.4):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim + knowledge_dim)
-        self.magic_transform = MagicSquareTransformation(embedding_dim + knowledge_dim)
+        self.magic_transform = MagicTriangleTransformation(embedding_dim + knowledge_dim)
         self.lstm = nn.LSTM(embedding_dim + knowledge_dim, rnn_units, batch_first=True)
         self.fc = nn.Linear(rnn_units, vocab_size)
         self.dropout = nn.Dropout(dropout_rate)
 
     def forward(self, x):
         x = self.embedding(x)
-        x = self.magic_transform(x)  # Apply magic square transformation
+        x = self.magic_transform(x)  # Apply magic triangle transformation
         lstm_out, _ = self.lstm(x)
         return self.fc(self.dropout(lstm_out[:, -1, :]))
 
