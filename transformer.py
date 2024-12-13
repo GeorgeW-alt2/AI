@@ -118,13 +118,11 @@ def load_model_and_vocab(vocab_path='vocab.pkl', model_path='knowledge_augmented
         word_to_index = pickle.load(f)
     vocab_size = len(word_to_index)
     model = KnowledgeAugmentedLSTM(vocab_size)
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path, weights_only=True))
     model.eval()
     print("Model and vocabulary loaded.")
     return model, word_to_index
-
-# Text Generation
-def generate_text(model, word_to_index, input_text, sequence_length, generate_length, temperature):
+def generate_text(model, word_to_index, input_text, sequence_length, generate_length, temperature, prune_threshold=0.01):
     input_sequence = preprocess_text(input_text)
     indices = [word_to_index.get(word, -1) for word in input_sequence if word in word_to_index]
 
@@ -138,7 +136,11 @@ def generate_text(model, word_to_index, input_text, sequence_length, generate_le
         with torch.no_grad():
             output = model(input_tensor)
             likelihood = torch.softmax(output / temperature, dim=1).squeeze()
-            next_word_idx = torch.multinomial(likelihood, 1).item()
+
+            # Forward-prune based on the prune_threshold
+            pruned_likelihood = torch.where(likelihood > prune_threshold, likelihood, torch.tensor(0.0))
+            next_word_idx = torch.multinomial(pruned_likelihood, 1).item()
+
             generated_text.append(next_word_idx)
             input_tensor = torch.cat((input_tensor[:, 1:], torch.tensor([[next_word_idx]])), dim=1)
 
